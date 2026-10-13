@@ -32,6 +32,7 @@ export function Timeline() {
     <div className="timeline" data-testid="timeline">
       <div className="timeline-head">
         <span className="tl-title">AP Timeline</span>
+        <small>Dashed ghost = your next turn after the hovered action</small>
         <span className="tl-clock">Clock {Math.round(battle.clock)} AP</span>
         {bfIn !== null && (
           <span className={`tl-breakfree ${bfIn < 300 ? 'urgent' : ''}`} title="Kill him before he tears free of the rubble.">
@@ -45,7 +46,7 @@ export function Timeline() {
           </span>
         )}
       </div>
-      <div className="tl-track">
+      <div className="tl-track" style={{ height: `${108 + entries.filter(e => e.kind !== 'unit' && e.at <= SPAN).length * 19}px` }}>
         {ticks.map((t) => (
           <div key={t} className={`tl-tick ${t % 50 === 0 ? 'major' : ''}`} style={{ left: pos(t) }}>
             {t % 50 === 0 && <span>{t}</span>}
@@ -64,8 +65,8 @@ export function Timeline() {
         )}
         {entries
           .filter((e) => e.kind !== 'unit' && e.at <= SPAN)
-          .map((e) => (
-            <div key={`tag-${e.id}`} className="tl-effect-tag" style={{ left: pos(e.at) }}>
+          .map((e, i) => (
+            <div key={`tag-${e.id}`} className="tl-effect-tag" style={{ left: pos(Math.min(e.at, 240)), top: `${108 + i * 19}px` }}>
               {e.label} · {Math.round(e.at)}
             </div>
           ))}

@@ -1,3 +1,6 @@
+import { UNITS } from '../content/units';
+import { Provenance } from './Guidance';
+import { Pattern } from './WeaponDetails';
 import { ARMOR, SKILLS, WEAPONS } from '../content/gear';
 import { basicAttackApCost, movementLeft, previewAttack } from '../rules/queries';
 import { combatActionReason, attackModes } from '../rules/equipment';
@@ -8,16 +11,11 @@ import { controller } from '../game/controller';
 import { activePlayer, endTurnPreview } from '../game/preview';
 import { ap, pct, useGame } from './hooks';
 
-const PATTERN_TEXT: Record<string, string> = {
-  cardinal: 'One tile N/E/S/W',
-  pairCw: 'Target + next tile clockwise',
-  line2: 'Two tiles in a straight line',
-  arc5: 'Target + two tiles each side',
-  adjacent: 'Any one adjacent tile',
-  ranged: 'Ranged single target',
-};
+import { PATTERN_TEXT, selectedWeaponMode } from '../game/weapon-summary';
 
 export function UnitCard({ unit, battle, compact = false }: { unit: UnitState; battle: BattleState; compact?: boolean }) {
+  const selection = useGame(s => s.mode);
+  const selected = selectedWeaponMode(battle, unit, selection);
   const weapon = WEAPONS[unit.weaponId];
   const nextIn = battle.active?.unitId === unit.id ? 0 : unit.nextTurnAt - battle.clock;
   return (
@@ -46,9 +44,12 @@ export function UnitCard({ unit, battle, compact = false }: { unit: UnitState; b
           {!unit.ko && <span>Acts in {Math.round(nextIn)} AP</span>}
         </div>
       )}
+      <Provenance value={UNITS[unit.templateId] ?? unit} />
+      <Provenance value={ARMOR[unit.armorClass]} />
       <div className="uc-weapon">
-        <b>{weapon?.name ?? unit.attack.name}</b> · {unit.attack.apCost} AP{unit.attack.stationaryDiscount ? ` (+${battle.config.bowMoveSurcharge} if moved)` : ''} · {PATTERN_TEXT[unit.attack.pattern]}
-        {unit.attack.range && ` ${unit.attack.range[0]}–${unit.attack.range[1]}`} · {Math.round(unit.attack.damage)} dmg · {pct(unit.attack.hit)} hit
+        <b>{weapon?.name ?? unit.attack.name} · {selected.name}</b> · {basicAttackApCost(battle, unit, selected.id)} AP · {PATTERN_TEXT[selected.pattern]}
+        {selected.range && ` · range ${selected.range[0]}–${selected.range[1]}`} · {Math.round(selected.damage)} dmg · {pct(selected.hit)} hit
+        {!compact && <Pattern mode={selected} />}
       </div>
       {unit.skills.length > 0 && (
         <div className="uc-skills">
