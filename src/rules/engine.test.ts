@@ -38,12 +38,14 @@ function sweepScenario(o: Parameters<typeof bossFight>[0] & { moveTo: { x: numbe
   expect(s.active?.unitId).toBe('jubal');
   const acts = [];
   if (o.moveTo.x !== o.at.x || o.moveTo.y !== o.at.y) acts.push({ type: 'move' as const, unitId: 'jubal', to: o.moveTo });
-  acts.push({ type: 'attack' as const, unitId: 'jubal', target: o.attack }, { type: 'endTurn' as const, unitId: 'jubal' });
+  acts.push({ type: 'attack' as const, unitId: 'jubal', target: o.attack });
   s = play(s, acts).state;
+  if (s.active?.unitId === 'jubal') s = applyAction(s, { type: 'endTurn', unitId: 'jubal' }).state;
   const jubalNext = unitById(s, 'jubal').nextTurnAt;
   // Boss turn: telegraph the sweep.
   expect(s.active?.unitId).toBe('boss');
-  s = play(s, [{ type: 'skill', unitId: 'boss', skillId: 'nephilim_sweep', target: { x: 5, y: 3 } }, { type: 'endTurn', unitId: 'boss' }]).state;
+  s = applyAction(s, { type: 'skill', unitId: 'boss', skillId: 'nephilim_sweep', target: { x: 5, y: 3 } }).state;
+  if (s.active?.unitId === 'boss') s = applyAction(s, { type: 'endTurn', unitId: 'boss' }).state;
   const sweep = s.effects[0];
   // If Jubal gets a turn before impact, run out of the zone.
   if (s.active?.unitId === 'jubal') {

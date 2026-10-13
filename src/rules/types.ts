@@ -26,6 +26,7 @@ export interface AttackProfile {
   apCost: number;
   /** Bow rule: stationary price. If the unit moves this turn (before or after), it pays apCost + config.bowMoveSurcharge. */
   stationaryDiscount?: boolean;
+  allowedReactions?: ReactionResult['kind'][];
   range?: [number, number];
   damage: number;
   hit: number;
@@ -85,6 +86,7 @@ export interface SkillDef {
   rawDamage?: number; // for sigils / spells that don't scale off a weapon
   applies?: 'dazed';
   stationaryDiscount?: boolean;
+  allowedReactions?: ReactionResult['kind'][];
   delay?: number;
   radius?: number; // sigil: Chebyshev radius of the area
   /** Boss abilities whose numbers come from the rules config (so they're tunable live). */

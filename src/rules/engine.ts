@@ -3,7 +3,8 @@
 import { ARMOR, SKILLS, WEAPONS } from '../content/gear';
 import { DAMAGE_SCALE, UNITS, companionHp } from '../content/units';
 import type { RulesConfig } from './config';
-import { damageAfterDefense, keepEngagedChance } from './formulas';
+import { keepEngagedChance } from './formulas';
+import { actionApCost, allowedReactions, delayedDamage, effectCanHit, resolvedDamage, resolveSkill, schedulerCompare, turnDelay } from './resolvers';
 import { add, cheb, eq, key, line, sign, type Vec } from './geometry';
 import { basicAttackHits, ringPenalty, skillTargeting } from './targeting';
 import { createRng, roll } from './rng';
@@ -163,6 +164,7 @@ export function applyAction(prev: BattleState, action: Action): { state: BattleS
       endTurn(state, unit, events);
       break;
   }
+  if (state.config.autoEndTurn && state.active?.acted && (state.active.movementLocked || state.config.movementBudget - state.active.moveSpent + 1e-6 < unit.moveApPerTile)) endTurn(state, unit, events);
   checkOutcome(state, events);
   if (state.active && unitById(state, state.active.unitId).ko) {
     // Active unit died mid-turn (attack of opportunity): its turn ends.
@@ -187,8 +189,7 @@ export function advance(state: BattleState, events: GameEvent[]): void {
     const breakFree = breakFreeAt(state);
     if (breakFree !== null) cands.push({ kind: 'effect', at: breakFree, side: 0, order: 9999, id: '__breakfree' });
     if (cands.length === 0) return;
-    const kindRank = (k: Cand['kind']) => ((k === 'unit') === cfg.tieUnitBeforeEffect ? 0 : 1);
-    cands.sort((a, b) => a.at - b.at || kindRank(a.kind) - kindRank(b.kind) || a.side - b.side || a.order - b.order);
+    cands.sort((a, b) => schedulerCompare(cfg, a, b));
     const next = cands[0]!;
     state.clock = Math.max(state.clock, round3(next.at));
     if (next.id === '__breakfree') {
@@ -258,7 +259,7 @@ function endTurn(state: BattleState, unit: UnitState, events: GameEvent[]): void
   if (!a || a.unitId !== unit.id) return;
   const spent = turnSpent(state);
   // Bosses keep a steady rhythm: even a turn spent watching costs a full boss turn.
-  const delay = Math.max(spent, unit.massive ? state.config.bossTurnAp : state.config.minTurnDelay);
+  const delay = turnDelay(state, unit, spent);
   unit.nextTurnAt = round3(a.startedAt + delay);
   const tel = state.telemetry[unit.id];
   if (tel) {
@@ -291,6 +292,8 @@ function doMove(state: BattleState, unit: UnitState, to: Vec, events: GameEvent[
   const r = reach.get(key(to));
   if (!r || r.path.length < 2) throw new RulesError('tile not reachable');
   const taken: Vec[] = [unit.pos];
+  const spentBefore = a.moveSpent;
+  let lastFree = unit.pos;
   for (let i = 1; i < r.path.length; i++) {
     const from = unit.pos;
     const step = r.path[i]!;
@@ -336,6 +339,7 @@ function doMove(state: BattleState, unit: UnitState, to: Vec, events: GameEvent[
       break;
     }
     unit.pos = { ...step };
+    if (!occ || occ.id === unit.id) lastFree = unit.pos;
     taken.push(step);
     a.moveSpent = round3(a.moveSpent + unit.moveApPerTile);
     if (held) {
@@ -343,9 +347,14 @@ function doMove(state: BattleState, unit: UnitState, to: Vec, events: GameEvent[
       break;
     }
   }
+  // Interrupted transit through allies settles on the last unoccupied tile, never on an ally.
+  if (state.units.some(x => x.id !== unit.id && alive(x) && tilesOf(x).some(t => eq(t, unit.pos)))) {
+    unit.pos = { ...lastFree };
+    taken.push(unit.pos);
+  }
   if (taken.length > 1) {
     a.moved = true;
-    events.push({ t: 'move', unitId: unit.id, path: taken, cost: round3((taken.length - 1) * unit.moveApPerTile) });
+    events.push({ t: 'move', unitId: unit.id, path: taken, cost: round3(a.moveSpent - spentBefore) });
     if (a.surchargePending && !a.surchargePaid) {
       a.actionSpent += state.config.bowMoveSurcharge;
       a.surchargePaid = true;
@@ -384,9 +393,10 @@ export function strike(state: BattleState, attacker: UnitState, target: UnitStat
   if (cfg.reactionsEnabled && !target.dazed && !opts.noReactions) {
     const mult = flanked ? cfg.flankReactionMult : 1;
     const options: { kind: ReactionResult['kind']; chance: number; ap: number }[] = [];
-    if (!target.immobile) options.push({ kind: 'dodge', chance: target.dodge * mult, ap: cfg.dodgeAp });
-    if (!profile.ranged) options.push({ kind: 'parry', chance: target.parry * mult, ap: cfg.parryAp });
-    options.push({ kind: 'block', chance: target.block * mult, ap: cfg.blockAp });
+    const allowed = allowedReactions(profile);
+    if (!target.immobile && allowed.includes('dodge')) options.push({ kind: 'dodge', chance: target.dodge * mult, ap: cfg.dodgeAp });
+    if (allowed.includes('parry')) options.push({ kind: 'parry', chance: target.parry * mult, ap: cfg.parryAp });
+    if (allowed.includes('block')) options.push({ kind: 'block', chance: target.block * mult, ap: cfg.blockAp });
     options.sort((x, y) => y.chance - x.chance);
     for (const o of options) {
       if (o.chance <= 0) continue;
@@ -421,9 +431,7 @@ export function strike(state: BattleState, attacker: UnitState, target: UnitStat
   const defense = dtype === 'physical' ? target.armor : target.mr;
   const pct = Math.min(1, profile.pctPen + (opts.pctPenBonus ?? 0));
   const effective = Math.max(0, defense * (1 - pct) - profile.flatPen);
-  let dmg = damageAfterDefense(raw, defense, pct, profile.flatPen);
-  if (flanked) dmg *= 1 + cfg.flankDamageTaken;
-  const amount = Math.max(1, Math.round(dmg));
+  const amount = resolvedDamage(state, target, raw, dtype, pct, profile.flatPen);
   Object.assign(ev, { raw: round3(raw), crit, defense, effectiveDefense: round3(effective), flanked, damage: amount });
   dealDamage(state, attacker, target, amount, events);
   ev.hpAfter = target.hp;
@@ -469,11 +477,6 @@ function onKo(state: BattleState, unit: UnitState, events: GameEvent[]): void {
   }
 }
 
-function attackCost(state: BattleState, profile: { apCost: number; stationaryDiscount?: boolean }): number {
-  const a = state.active!;
-  return profile.stationaryDiscount && a.moved ? profile.apCost + state.config.bowMoveSurcharge : profile.apCost;
-}
-
 function markStationary(state: BattleState, profile: { stationaryDiscount?: boolean }): void {
   const a = state.active!;
   if (profile.stationaryDiscount && !a.moved) a.surchargePending = true;
@@ -486,7 +489,7 @@ function doAttack(state: BattleState, unit: UnitState, target: Vec, events: Game
   const res = basicAttackHits(state, unit, target);
   if (!res) throw new RulesError('cannot attack there');
   if (res.hits.filter((h) => h.unit.side !== unit.side).length === 0 && !state.config.friendlyFire) throw new RulesError('no enemy in that pattern');
-  const cost = attackCost(state, unit.attack);
+  const cost = actionApCost(state, unit, unit.attack);
   markStationary(state, unit.attack);
   a.actionSpent += cost;
   a.acted = true;
@@ -507,7 +510,7 @@ function doSkill(state: BattleState, unit: UnitState, skillId: string, target: V
   if (!skillReady(state, unit, skillId)) throw new RulesError('skill on cooldown');
   const tg = skillTargeting(state, unit, skill, target);
   if (!tg.valid) throw new RulesError(tg.reason ?? 'invalid target');
-  const cost = skill.special ? state.config.bossTurnAp : attackCost(state, skill);
+  const cost = actionApCost(state, unit, skill);
   markStationary(state, skill);
   a.actionSpent += cost;
   a.acted = true;
@@ -515,11 +518,8 @@ function doSkill(state: BattleState, unit: UnitState, skillId: string, target: V
   slot.readyAt = round3(state.clock + skill.cooldown);
   events.push({ t: 'attack', attackerId: unit.id, name: skill.name, tiles: tg.area ?? [target], apCost: cost, targetTile: target });
 
-  const profile: AttackProfile = { ...unit.attack, hit: unit.attack.hit + (skill.hitBonus ?? 0), ranged: skill.kind === 'shot' };
-  if (skill.damageType) profile.damageType = skill.damageType;
-  const opts: StrikeOpts = { damageMult: skill.damageMult, ...(skill.pctPenBonus !== undefined && { pctPenBonus: skill.pctPenBonus }), ...(skill.applies && { applies: skill.applies }), ...(skill.rawDamage !== undefined && { rawDamage: skill.rawDamage }), ...(skill.damageType && { damageType: skill.damageType }) };
-  if (skill.special === 'rockThrow') opts.rawDamage = state.config.rockThrowDamage;
-  if (skill.rawDamage !== undefined) { profile.pctPen = 0; profile.flatPen = 0; profile.hit = 0.9 + (skill.hitBonus ?? 0); }
+  const { profile, delay } = resolveSkill(state, unit, skill);
+  const opts: StrikeOpts = { ...(skill.applies && { applies: skill.applies }) };
 
   switch (skill.kind) {
     case 'strike':
@@ -550,19 +550,10 @@ function doSkill(state: BattleState, unit: UnitState, skillId: string, target: V
       }
       break;
     }
-    case 'sigil': {
-      const cfg = state.config;
-      const mult = unit.side === 'player' ? cfg.playerDamageMult : cfg.enemyDamageMult;
-      const rockfall = skill.special === 'rockfall';
-      const dmg = (rockfall ? cfg.rockfallDamage : (skill.rawDamage ?? 0)) * mult;
-      const delay = rockfall ? cfg.rockfallDelay : (skill.delay ?? 100);
-      if (rockfall) for (const u of state.units) if (tg.area!.some((t) => eq(t, u.pos))) state.memory[`hidden:${u.id}`] = 0;
-      castEffect(state, unit, { name: skill.name, tiles: tg.area!, delay, damage: dmg, damageType: skill.damageType ?? 'magic', pctPen: 0 }, events);
-      break;
-    }
+    case 'sigil':
     case 'sweep': {
-      const cfg = state.config;
-      castEffect(state, unit, { name: skill.name, tiles: tg.area!, delay: cfg.sweepDelay, damage: cfg.sweepDamage * cfg.enemyDamageMult, damageType: 'physical', pctPen: cfg.sweepArmorPen }, events);
+      if (skill.special === 'rockfall') for (const u of state.units) if (tg.area!.some((t) => eq(t, u.pos))) state.memory[`hidden:${u.id}`] = 0;
+      castEffect(state, unit, { name: skill.name, tiles: tg.area!, delay, damage: profile.damage, damageType: profile.damageType, pctPen: profile.pctPen, ...(skill.applies && { applies: skill.applies }) }, events);
       break;
     }
   }
@@ -577,7 +568,7 @@ export function castEffect(
   events: GameEvent[],
 ): DelayedEffect {
   state.seq += 1;
-  const threatened = state.units.filter((u) => alive(u) && tilesOf(u).some((t) => spec.tiles.some((x) => eq(x, t)))).map((u) => u.id);
+  const threatened = state.units.filter((u) => effectCanHit(state, { sourceId: source.id }, u) && tilesOf(u).some((t) => spec.tiles.some((x) => eq(x, t)))).map((u) => u.id);
   const eff: DelayedEffect = {
     id: `fx${state.seq}`,
     name: spec.name,
@@ -601,10 +592,8 @@ function resolveEffect(state: BattleState, eff: DelayedEffect, events: GameEvent
   const hits: { unitId: string; damage: number; hpAfter: number }[] = [];
   const victims = state.units.filter((u) => alive(u) && tilesOf(u).some((t) => eff.tiles.some((x) => eq(x, t))));
   for (const u of victims) {
-    if (source && u.id === source.id) continue;
-    if (source && u.side === source.side && !state.config.delayedHitsAllies) continue;
-    const defense = eff.damageType === 'physical' ? u.armor : u.mr;
-    const amount = Math.max(1, Math.round(damageAfterDefense(eff.damage, defense, eff.pctPen, 0)));
+    if (!effectCanHit(state, eff, u)) continue;
+    const amount = delayedDamage(state, eff, u);
     dealDamage(state, source, u, amount, events);
     hits.push({ unitId: u.id, damage: amount, hpAfter: u.hp });
     const tel = state.telemetry[u.id];
@@ -614,7 +603,7 @@ function resolveEffect(state: BattleState, eff: DelayedEffect, events: GameEvent
     if (!hits.some((h) => h.unitId === id)) {
       const u = state.units.find((x) => x.id === id);
       const tel = state.telemetry[id];
-      if (u && alive(u) && tel) tel.escapes += 1;
+      if (u && effectCanHit(state, eff, u) && tel) tel.escapes += 1;
     }
   }
   events.push({ t: 'effectResolve', effectId: eff.id, name: eff.name, tiles: eff.tiles, hits });
@@ -634,7 +623,7 @@ function checkOutcome(state: BattleState, events: GameEvent[]): void {
   if (players.length === 0) state.outcome = 'defeat';
   else if (enemies.length === 0) state.outcome = 'victory';
   if (state.outcome !== 'ongoing') {
-    state.active = null;
+    if (state.active) endTurn(state, unitById(state, state.active.unitId), events);
     events.push({ t: 'outcome', outcome: state.outcome });
   }
 }

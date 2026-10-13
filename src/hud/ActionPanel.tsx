@@ -1,5 +1,5 @@
 import { ARMOR, SKILLS, WEAPONS } from '../content/gear';
-import { movementLeft, skillCost } from '../rules/queries';
+import { basicAttackApCost, movementLeft, skillCost } from '../rules/queries';
 import { unitById } from '../rules/state';
 import type { BattleState, UnitState } from '../rules/types';
 import { controller } from '../game/controller';
@@ -95,7 +95,7 @@ export function ActionPanel() {
               Move <kbd>M</kbd>
             </button>
             <button className={mode.kind === 'attack' ? 'on' : ''} onClick={() => controller.setMode({ kind: 'attack' })} disabled={busy || a.acted} title="A">
-              Attack · {u.attack.stationaryDiscount && a.moved ? u.attack.apCost + battle.config.bowMoveSurcharge : u.attack.apCost} <kbd>A</kbd>
+              Attack · {basicAttackApCost(battle, u)} <kbd>A</kbd>
             </button>
           </div>
           <div className="btn-row">
@@ -114,8 +114,8 @@ export function ActionPanel() {
           </div>
           <button className={`end-turn ${end?.danger ?? ''}`} onClick={() => void controller.endTurn()} disabled={busy} data-testid="end-turn" title={end?.text || 'End your turn'}>
             {spent === 0 ? 'Wait' : 'End turn'} → next in {Math.round(end?.projected ?? 0)} AP <kbd>Space</kbd>
-            {end?.danger === 'hit' && <div className="warn">⚠ You'll be hit before you act</div>}
-            {end?.danger === 'risk' && <div className="warn">⚠ In the sweep zone when he acts</div>}
+            {end?.danger === 'hit' && <div className="warn">⚠ No escape if you stop here</div>}
+            {end?.danger === 'risk' && <div className="warn">⚠ Escape risk — inspect the timeline</div>}
           </button>
           <div className="hint">{mode.kind === 'move' ? 'Click a blue tile to move, or an enemy to attack it. Right-click cancels.' : mode.kind === 'attack' ? 'Click a tile to aim. Patterns hit every enemy in them.' : 'Click a highlighted target.'}</div>
         </div>
