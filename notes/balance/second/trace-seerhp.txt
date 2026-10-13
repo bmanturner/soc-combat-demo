@@ -1,0 +1,146 @@
+policy: expert; CONFIG {"wpn_daggers_dmg":1,"wpn_daggers_hit":0,"wpn_shield_dmg":1,"wpn_shield_hit":0,"wpn_polearm_dmg":1,"wpn_polearm_hit":0,"wpn_two_handed_dmg":1,"wpn_two_handed_hit":0,"wpn_bow_dmg":1,"wpn_bow_hit":0,"wpn_crossbow_dmg":1,"wpn_crossbow_hit":0,"wpn_dual_wield_dmg":1,"wpn_dual_wield_hit":0,"wpn_javelin_shield_dmg":1,"wpn_javelin_shield_hit":0,"wpn_colossal_dmg":1,"wpn_colossal_hit":0,"enemy_small_rat_hp":1,"enemy_small_rat_dmg":0.8,"enemy_wolf_hp":1,"enemy_wolf_dmg":1,"enemy_cultist_fighter_hp":1,"enemy_cultist_fighter_dmg":1,"enemy_cultist_mage_hp":1.5,"enemy_cultist_mage_dmg":1,"enemy_nephilim_hp":0.9,"enemy_nephilim_dmg":1,"proficientAllWeapons":true,"unlockSpecialWeapons":true,"crossbowReload":"flexible","weaponSwapAp":50,"movementBudget":50,"minTurnDelay":25,"autoEndTurn":true,"tieUnitBeforeEffect":true,"tiePlayerFirst":true,"moveApClothing":10,"moveApLight":10,"moveApMedium":12.5,"moveApHeavy":15,"diagonalMovement":false,"engageBase":0.2,"engagePerPoint":0.1,"engageMin":0.05,"engageMax":0.95,"multiEngager":"highest","aooChance":0.5,"bossesEngage":false,"flankDamageTaken":0.25,"flankReactionMult":0.5,"flankDiagonals":false,"friendlyFire":false,"delayedHitsAllies":true,"critChance":0.05,"critMult":1.5,"twoHandedNearPenalty":0.1,"twoHandedFarPenalty":0.2,"bowMoveSurcharge":50,"reactionsEnabled":true,"dodgeAp":25,"parryAp":25,"blockAp":35,"dodgeDisplaces":true,"dazedPushback":50,"bossDazeMult":0.5,"bossTurnAp":100,"sweepDelay":100,"sweepDepth":3,"sweepDamage":350,"sweepArmorPen":0.5,"rockThrowDamage":150,"rockfallDelay":100,"rockfallDamage":220,"coverCampTurns":2,"bossBreakFreeAt":1200,"wolfPackFear":true,"playerDamageMult":1,"enemyDamageMult":1,"enemyHpMult":1,"sweepStreakCap":2,"rockThrowFallback":"any-exposed"}
+— Jubal's turn @ 0 AP
+Jubal moves 3 tiles to (4,4) (30 AP)
+Jubal uses Precision Stab (75 AP)
+  → Left Zealot: hit 88% rolled 79 · block 25% rolled 82 · dodge 8% rolled 69 · parry 5% rolled 88 → 92.625 (crit) × 100/(100+41.25) = 66 dmg (HP 64)
+  Jubal spent 105 AP → next turn in 105 AP
+— Jabal's turn @ 10 AP
+Jabal moves 3 tiles to (7,4) (30 AP)
+Jabal uses Heavy Daze (125 AP)
+  → Right Zealot: hit 80% rolled 42 · block 25% rolled 30 · dodge 8% rolled 11 · parry 5% rolled 75 → 93.6 × 100/(100+52.5) = 61 dmg (HP 69)
+Right Zealot is DAZED (+50 AP, no reactions)
+  Jabal spent 155 AP → next turn in 155 AP
+— Left Zealot's turn @ 30 AP
+Left Zealot uses Ritual blade (75 AP)
+  → Jubal: hit 82% rolled 64 · dodge 20% rolled 18 ✓ → DODGE (pushed to (4,5))
+Left Zealot moves 2 tiles to (6,3) (20 AP)
+  Left Zealot spent 95 AP → next turn in 95 AP
+— Seer's turn @ 50 AP
+Seer uses Daze Bolt (100 AP)
+  → Jabal: hit 90% rolled 85 · dodge 15% rolled 50 → 35 × 100/(100+25) = 28 dmg (HP 170)
+Jabal is DAZED (+50 AP, no reactions)
+  Seer spent 100 AP → next turn in 100 AP
+— Right Zealot's turn @ 90 AP
+Right Zealot uses Ritual blade (75 AP)
+  → Jabal: hit 82% rolled 4 → 45 × 100/(100+90) = 24 dmg (HP 146)
+Right Zealot recovers
+  Right Zealot spent 75 AP → next turn in 75 AP
+— Left Zealot's turn @ 125 AP
+  Left Zealot spent 0 AP → next turn in 25 AP
+— Jubal's turn @ 130 AP
+Jubal moves 3 tiles to (5,3) (30 AP)
+Jubal uses Dagger strike (50 AP)
+  → Left Zealot: hit 88% rolled 32 · block 25% rolled 56 · dodge 8% rolled 81 · parry 5% rolled 25 → 49.4 × 100/(100+60) = 31 dmg (HP 33)
+  Jubal spent 80 AP → next turn in 80 AP
+— Left Zealot's turn @ 150 AP
+Left Zealot uses Ritual blade (75 AP)
+  → Jubal: hit 82% rolled 80 · dodge 20% rolled 30 · parry 5% rolled 17 → 45 × 100/(100+90) = 24 dmg (HP 146)
+Left Zealot tries to break from Jabal: held 40%, rolled 19 → HELD (1 tile only)
+Jabal holds Left Zealot but finds no opening.
+Left Zealot moves 1 tile to (6,2) (10 AP)
+  Left Zealot spent 85 AP → next turn in 85 AP
+— Seer's turn @ 150 AP
+Seer uses Hellfire Sigil (125 AP)
+⚠ Hellfire Sigil telegraphed on 8 tiles: lands in 100 AP (@250)
+Seer moves 5 tiles to (1,1) (50 AP)
+  Seer spent 175 AP → next turn in 175 AP
+— Right Zealot's turn @ 165 AP
+Right Zealot tries to break from Jabal: held 40%, rolled 84 → slips free
+Right Zealot moves 5 tiles to (4,1) (50 AP)
+  Right Zealot spent 50 AP → next turn in 50 AP
+— Jubal's turn @ 210 AP
+Jubal uses Precision Stab (75 AP)
+  → Left Zealot: hit 88% rolled 70 · block 25% rolled 46 · dodge 8% rolled 96 · parry 5% rolled 40 → 61.75 × 100/(100+41.25) = 44 dmg (HP 0)
+✖ Left Zealot is down
+Jubal moves 1 tile to (6,3) (10 AP)
+  Jubal spent 85 AP → next turn in 85 AP
+— Jabal's turn @ 215 AP
+Jabal moves 4 tiles to (6,1) (40 AP)
+Jabal recovers
+  Jabal spent 40 AP → next turn in 40 AP
+— Right Zealot's turn @ 215 AP
+  Right Zealot spent 0 AP → next turn in 25 AP
+— Right Zealot's turn @ 240 AP
+Right Zealot moves 1 tile to (4,2) (10 AP)
+  Right Zealot spent 10 AP → next turn in 10 AP
+— Right Zealot's turn @ 250 AP
+Right Zealot moves 3 tiles to (2,1) (30 AP)
+  Right Zealot spent 30 AP → next turn in 30 AP
+✸ Hellfire Sigil lands on empty ground
+— Jabal's turn @ 255 AP
+Jabal moves 3 tiles to (3,1) (30 AP)
+Jabal uses Club swing (125 AP)
+  → Right Zealot: hit 80% rolled 73 · block 25% rolled 13 ✓ → BLOCK
+  Jabal spent 155 AP → next turn in 155 AP
+— Jubal's turn @ 295 AP
+Jubal moves 1 tile to (5,3) (10 AP)
+Jubal uses Throwing Knife (75 AP)
+  → Seer: hit 88% rolled 35 · dodge 10% rolled 50 → 39.52 × 100/(100+10) = 36 dmg (HP 99)
+  Jubal spent 85 AP → next turn in 85 AP
+— Right Zealot's turn @ 315 AP
+Right Zealot uses Ritual blade (75 AP)
+  → Jabal: hit 82% rolled 21 · dodge 15% rolled 2 ✓ → DODGE (pushed to (4,1))
+Right Zealot moves 1 tile to (3,1) (10 AP)
+  Right Zealot spent 85 AP → next turn in 85 AP
+— Seer's turn @ 325 AP
+Seer uses Daze Bolt (100 AP)
+  → Jabal: hit 90% rolled 3 · dodge 15% rolled 69 → 35 × 100/(100+25) = 28 dmg (HP 118)
+Jabal is DAZED (+50 AP, no reactions)
+  Seer spent 100 AP → next turn in 100 AP
+— Jubal's turn @ 380 AP
+Jubal moves 3 tiles to (3,2) (30 AP)
+Jubal uses Dagger strike (50 AP)
+  → Right Zealot: hit 88% rolled 80 · block 25% rolled 69 · dodge 8% rolled 7 ✓ → DODGE
+  Jubal spent 80 AP → next turn in 80 AP
+— Right Zealot's turn @ 425 AP
+Right Zealot uses Ritual blade (75 AP)
+  → Jubal: hit 82% rolled 81 · dodge 20% rolled 90 · parry 5% rolled 13 → 45 × 100/(100+90) = 24 dmg (HP 122)
+Right Zealot tries to break from Jabal: held 40%, rolled 56 → slips free
+Right Zealot moves 1 tile to (2,1) (10 AP)
+  Right Zealot spent 85 AP → next turn in 85 AP
+— Seer's turn @ 425 AP
+Seer moves 5 tiles to (1,6) (50 AP)
+  Seer spent 50 AP → next turn in 50 AP
+— Jubal's turn @ 460 AP
+Jubal uses Precision Stab (75 AP)
+  → Right Zealot: hit 88% rolled 85 · block 25% rolled 53 · dodge 8% rolled 25 · parry 5% rolled 51 → 61.75 × 100/(100+41.25) = 44 dmg (HP 25)
+  Jubal spent 75 AP → next turn in 75 AP
+— Seer's turn @ 475 AP
+Seer moves 3 tiles to (3,7) (30 AP)
+Seer uses Daze Bolt (100 AP)
+  → Jubal: hit 90% rolled 77 · dodge 20% rolled 65 → 35 × 100/(100+25) = 28 dmg (HP 94)
+Jubal is DAZED (+50 AP, no reactions)
+  Seer spent 130 AP → next turn in 130 AP
+— Jabal's turn @ 485 AP
+Jabal moves 1 tile to (3,1) (10 AP)
+Jabal uses Heavy Daze (125 AP)
+  → Right Zealot: hit 80% rolled 20 · block 25% rolled 82 · dodge 8% rolled 48 · parry 5% rolled 5 → 93.6 × 100/(100+52.5) = 61 dmg (HP 0)
+✖ Right Zealot is down
+Jabal recovers
+  Jabal spent 135 AP → next turn in 135 AP
+— Jubal's turn @ 585 AP
+Jubal moves 4 tiles to (3,6) (40 AP)
+Jubal uses Dagger strike (50 AP)
+  → Seer: hit 88% rolled 62 · dodge 10% rolled 81 · parry 5% rolled 68 → 49.4 × 100/(100+10) = 45 dmg (HP 54)
+Jubal recovers
+  Jubal spent 90 AP → next turn in 90 AP
+— Seer's turn @ 605 AP
+Seer tries to break from Jubal: held 5%, rolled 43 → slips free
+Seer moves 4 tiles to (7,7) (40 AP)
+  Seer spent 40 AP → next turn in 40 AP
+— Jabal's turn @ 620 AP
+Jabal moves 5 tiles to (4,5) (50 AP)
+  Jabal spent 50 AP → next turn in 50 AP
+— Seer's turn @ 645 AP
+Seer uses Hellfire Sigil (125 AP)
+⚠ Hellfire Sigil telegraphed on 7 tiles: lands in 100 AP (@745)
+  Seer spent 125 AP → next turn in 125 AP
+— Jabal's turn @ 670 AP
+Jabal moves 3 tiles to (6,6) (30 AP)
+Jabal uses Club swing (125 AP)
+  → Seer: hit 80% rolled 39 · dodge 10% rolled 85 · parry 5% rolled 12 → 140.4 (crit) × 100/(100+17.5) = 119 dmg (HP 0)
+✖ Seer is down
+  Jabal spent 155 AP → next turn in 155 AP
+★ VICTORY
+
+victory at 670 AP; party HP 58%

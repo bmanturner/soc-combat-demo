@@ -1,0 +1,15 @@
+| Family / mode | AP cycle | No armor/reactions | Unarmored rat (15% dodge) | Armor 100, no reactions |
+|---|---:|---:|---:|---:|
+| daggers/basic | 50 | 68.55 | 58.27 | 37.84 |
+| shield/basic | 75 | 64.67 | 54.97 | 34.06 |
+| polearm/basic | 100 | 61.99 | 52.69 | 34.44 |
+| two_handed/basic | 125 | 64.62 | 54.92 | 37.75 |
+| hunting_bow/basic | 75 | 68.96 | 58.62 | 36.83 |
+| crossbow/fire | 100 | 68.85 | 58.52 | 38.33 |
+| dual_wield/basic | 100 | 69.70 | 59.24 | 36.63 |
+| javelin_shield/thrust | 75 | 64.67 | 54.97 | 34.06 |
+| javelin_shield/throw | 125 | 49.36 | 41.96 | 26.08 |
+| colossal/line | 175 | 54.82 | 46.60 | 31.21 |
+| colossal/sweep | 175 | 54.82 | 46.60 | 31.21 |
+
+Dual assumes the primary survives and remains the only secondary candidate. All AoE rows are one distinct target; no multi-cell boss multiplication. Bow movement changes the attack cost from 75 to 125, plus movement itself. Crossbow includes fire + reload, not opener-only throughput.

@@ -14,9 +14,9 @@ const TUNING_DEFAULTS = Object.fromEntries([
 ]) as Tuning;
 const ENEMY_BALANCE_WHY: Partial<Record<keyof Tuning, string>> = {
   enemy_small_rat_dmg: '1→.8: tutorial safety margin for slow starters; 100-seed pre-budget candidate raised axe wins 97.5% baseline (40 seeds) to 100%, HP 61.2→70.6%. Final confirmation in BALANCE.md.',
-  enemy_cultist_fighter_dmg: '1→.5 together with seer damage: reduces the light-armor dagger attrition outlier without changing its source pattern. Intermediate .55 candidate still had 25.90pp light HP spread (target ≤25). See BALANCE.md.',
-  enemy_cultist_mage_dmg: '1→.5 together with zealot damage: limits control-plus-damage punishment. Intermediate .55 candidate still had 25.90pp expert light HP spread; final 100-seed evidence in BALANCE.md.',
-  enemy_nephilim_hp: '1→.9: compensates lower isolated weapon budgets, not a free global party buff. Paired with 1200 AP deadline and readable 100 AP sweeps; 40-seed candidate novice win 47.04% vs baseline 18.70%. See BALANCE.md.',
+  enemy_cultist_fighter_dmg: 'Second pass .5→.75: restore the zealot threat after the parity-only nerf trivialized the shrine. Pair with local melee focus and Seer ×1.5, rather than restoring ×1 physical attrition: the latter left expert light javelin at 80% wins in 100 seeds. Full confirmation and remaining C1 misses in BALANCE.md.',
+  enemy_cultist_mage_dmg: 'Second pass .5→1.5: make the Seer a real priority and move challenge toward telegraphed magic, rather than disproportionately punishing light melee with zealot blades. Joint .75/1.5 screen: expert light minimum 85% wins, HP spread 25.74pp. These are demo numbers, not new canon; final confirmation and misses in BALANCE.md.',
+  enemy_nephilim_hp: 'Second pass .9→.95 (1080→1140 HP): counterweight to sweep depth 3→2 and streak cap 1. Final 100-seed novice win 49.67%, family spread 46.67pp vs 65.67pp before; expert dual still exceeds its win ceiling (99.67%). HP ×1 screened bow below 80% before curing dual. Full evidence and honest misses in BALANCE.md.',
 };
 
 export interface RulesConfig extends Tuning {
@@ -88,9 +88,9 @@ export interface RulesConfig extends Tuning {
 export const DEFAULT_CONFIG: RulesConfig = {
   ...TUNING_DEFAULTS,
   enemy_small_rat_dmg: .8,
-  enemy_cultist_fighter_dmg: .5,
-  enemy_cultist_mage_dmg: .5,
-  enemy_nephilim_hp: .9,
+  enemy_cultist_fighter_dmg: .75,
+  enemy_cultist_mage_dmg: 1.5,
+  enemy_nephilim_hp: .95,
   proficientAllWeapons: true,
   unlockSpecialWeapons: true,
   crossbowReload: 'flexible',
@@ -131,7 +131,7 @@ export const DEFAULT_CONFIG: RulesConfig = {
   bossDazeMult: 0.5,
   bossTurnAp: 100,
   sweepDelay: 100,
-  sweepDepth: 3,
+  sweepDepth: 2,
   sweepDamage: 350,
   sweepArmorPen: 0.5,
   rockThrowDamage: 150,
@@ -143,7 +143,7 @@ export const DEFAULT_CONFIG: RulesConfig = {
   playerDamageMult: 1,
   enemyDamageMult: 1,
   enemyHpMult: 1,
-  sweepStreakCap: 2,
+  sweepStreakCap: 1,
   rockThrowFallback: 'any-exposed',
 };
 
@@ -213,7 +213,7 @@ export const SETTINGS: SettingDef[] = [
   // Boss
   { key: 'bossTurnAp', label: 'Nephilim acts every', group: 'Nephilim', type: 'number', min: 50, max: 200, step: 5, unit: 'AP', status: 'demo', why: 'Undefined. Every 100 AP gives a readable rhythm against the 100 AP demo sweep delay.' },
   { key: 'sweepDelay', label: 'Sweep telegraph delay', group: 'Nephilim', type: 'number', min: 25, max: 150, step: 5, unit: 'AP', status: 'demo', why: 'Tentative 75→100 AP for a readable response window. Alongside damage 500→350, rock 170→150, HP ×.9 and deadline 1200: 40-seed novice boss win 47.04%, slow colossal 25%, rather than baseline 0% colossal. 150 AP made the boss trivial; see BALANCE.md.' },
-  { key: 'sweepDepth', label: 'Sweep zone depth', group: 'Nephilim', type: 'number', min: 1, max: 6, step: 1, unit: 'tiles', status: 'demo', why: 'The real lever: at 3 every armor can escape with good timing; at 4+ heavy armor deep in the zone cannot.' },
+  { key: 'sweepDepth', label: 'Sweep zone depth', group: 'Nephilim', type: 'number', min: 1, max: 6, step: 1, unit: 'tiles', status: 'demo', why: 'Second pass 3→2: preserve the lethal hit-and-get-out lesson while shortening escape routes. Depth 3 plus sweep cap 1 drove novice colossal to 6.67% in the 40-seed screen; depth 2 raised it to 41.67% before the compensating HP increase. Final full-grid confirmation and misses in BALANCE.md.' },
   { key: 'sweepDamage', label: 'Sweep raw damage', group: 'Nephilim', type: 'number', min: 100, max: 1000, step: 25, unit: 'dmg', status: 'demo', why: 'Aaron: overwhelming, possibly one-shot. Demo 500→350: remains lethal to light armor, but medium/heavy can survive one mistake. Paired tuning produced 47.04% novice boss wins at 40 seeds/armor; see BALANCE.md.' },
   { key: 'sweepArmorPen', label: 'Sweep armor penetration', group: 'Nephilim', type: 'number', min: 0, max: 1, step: 0.05, unit: '%', status: 'demo', why: 'Keeps heavy armor from shrugging off the lesson.' },
   { key: 'rockThrowDamage', label: 'Rock throw raw damage', group: 'Nephilim', type: 'number', min: 0, max: 300, step: 10, unit: 'dmg', status: 'demo', why: 'Demo 170→150: maintain exposed-ranged pressure without the baseline bow boss outlier (75% expert wins). Paired candidate improved bow to 89.17% expert at 40 seeds/armor; see BALANCE.md, not an isolated causal claim.' },
@@ -226,7 +226,7 @@ export const SETTINGS: SettingDef[] = [
   { key: 'playerDamageMult', label: 'Party damage multiplier', group: 'Encounters', type: 'number', min: 0.25, max: 3, step: 0.05, unit: 'x', status: 'demo', why: 'Global difficulty knob.' },
   { key: 'enemyDamageMult', label: 'Enemy damage multiplier', group: 'Encounters', type: 'number', min: 0.25, max: 3, step: 0.05, unit: 'x', status: 'demo', why: 'Global difficulty knob.' },
   { key: 'enemyHpMult', label: 'Enemy HP multiplier', group: 'Encounters', type: 'number', min: 0.25, max: 3, step: 0.05, unit: 'x', status: 'demo', why: 'Global difficulty knob.' },
-  { key: 'sweepStreakCap', label: 'Sweeps before exposed ranged pressure', group: 'Nephilim', type: 'number', min: 1, max: 10, step: 1, unit: 'turns', status: 'demo', why: 'Bounds sweep bait: after this many consecutive sweeps an exposed ranged foe gets a rock instead.' },
+  { key: 'sweepStreakCap', label: 'Sweeps before exposed ranged pressure', group: 'Nephilim', type: 'number', min: 1, max: 10, step: 1, unit: 'turns', status: 'demo', why: 'Second pass 2→1: exposed ranged units receive a rock after one consecutive sweep rather than safely exploiting two sweep commitments. Alone it also killed the companion sooner and over-punished novice melee; pair with depth 2 and HP ×.95. Final evidence and remaining C3 misses in BALANCE.md.' },
   { key: 'rockThrowFallback', label: 'Rock throw fallback targets', group: 'Nephilim', type: 'select', options: [{ value: 'ranged-only', label: 'Ranged only' }, { value: 'any-exposed', label: 'Any exposed foe' }], status: 'demo', why: 'Prefer ranged pressure; optionally throw at exposed melee when no ranged target is visible.' },
 ];
 

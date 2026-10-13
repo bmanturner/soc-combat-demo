@@ -1,0 +1,143 @@
+[
+  {
+    "id": "C1",
+    "policy": "expert",
+    "armor": "light",
+    "met": true,
+    "minWin": 86,
+    "maxWin": 98,
+    "medianHp": 49.43749999999998,
+    "hpSpread": 26.271739130434803
+  },
+  {
+    "id": "C1",
+    "policy": "expert",
+    "armor": "medium",
+    "met": false,
+    "minWin": 86,
+    "maxWin": 100,
+    "medianHp": 54.095108695652186,
+    "hpSpread": 25.519021739130473
+  },
+  {
+    "id": "C1",
+    "policy": "expert",
+    "armor": "heavy",
+    "met": false,
+    "minWin": 93,
+    "maxWin": 99,
+    "medianHp": 50.79076086956522,
+    "hpSpread": 21.951086956521692
+  },
+  {
+    "id": "C1",
+    "policy": "novice",
+    "armor": "light",
+    "met": false,
+    "minWin": 88,
+    "maxWin": 97,
+    "medianHp": 43.377717391304344,
+    "hpSpread": 12.972826086956566
+  },
+  {
+    "id": "C1",
+    "policy": "novice",
+    "armor": "medium",
+    "met": false,
+    "minWin": 87,
+    "maxWin": 98,
+    "medianHp": 47.44565217391305,
+    "hpSpread": 17.657608695652186
+  },
+  {
+    "id": "C1",
+    "policy": "novice",
+    "armor": "heavy",
+    "met": false,
+    "minWin": 91,
+    "maxWin": 100,
+    "medianHp": 50.25815217391305,
+    "hpSpread": 23.13586956521734
+  },
+  {
+    "id": "C2",
+    "policy": "expert",
+    "armor": "light",
+    "met": true,
+    "minWin": 99,
+    "medianHp": 71.61488673139158
+  },
+  {
+    "id": "C2",
+    "policy": "expert",
+    "armor": "medium",
+    "met": true,
+    "minWin": 99,
+    "medianHp": 74.10032362459543
+  },
+  {
+    "id": "C2",
+    "policy": "expert",
+    "armor": "heavy",
+    "met": true,
+    "minWin": 100,
+    "medianHp": 69.19741100323621
+  },
+  {
+    "id": "C2",
+    "policy": "novice",
+    "armor": "light",
+    "met": true,
+    "minWin": 99,
+    "medianHp": 71.16828478964405
+  },
+  {
+    "id": "C2",
+    "policy": "novice",
+    "armor": "medium",
+    "met": true,
+    "minWin": 99,
+    "medianHp": 73.23948220064723
+  },
+  {
+    "id": "C2",
+    "policy": "novice",
+    "armor": "heavy",
+    "met": true,
+    "minWin": 100,
+    "medianHp": 69.7281553398058
+  },
+  {
+    "id": "C3",
+    "met": false,
+    "expertWinRange": [
+      85.33333333333333,
+      99.66666666666667
+    ],
+    "expertMaxHp": 90.0531073446328,
+    "noviceOverall": 49.666666666666664,
+    "noviceWinRange": [
+      29,
+      75.66666666666667
+    ],
+    "noviceSpread": 46.66666666666667,
+    "noviceArmor": {
+      "light": 27.77777777777778,
+      "medium": 55,
+      "heavy": 66.22222222222223
+    }
+  },
+  {
+    "id": "C4-T1",
+    "met": true,
+    "minWin": 100,
+    "minHp": 70.56666666666668
+  },
+  {
+    "id": "C4-T5",
+    "met": true,
+    "battles": 26680,
+    "stalls": 0,
+    "illegal": 0
+  }
+]

@@ -1,0 +1,31 @@
+
+ RUN  v5.0.4 /home/needz/Dev/personal/soc-fix/balance2
+
+ ❯ src/rules/ai-behavior.test.ts (12 tests | 1 failed) 88ms
+   ❯ AI intent regressions (12)
+     × expert melee focus does not route through a healthy screen for a lower-HP backline 7ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/rules/ai-behavior.test.ts > AI intent regressions > expert melee focus does not route through a healthy screen for a lower-HP backline
+AssertionError: expected 'seer' to be 'guard' // Object.is equality
+
+Expected: "guard"
+Received: "seer"
+
+ ❯ src/rules/ai-behavior.test.ts:20:44
+     18|     ] });
+     19|     const u = unitById(s, 'jubal');
+     20|     expect(partyFocus(s, u, 'expert')?.id).toBe('guard');
+       |                                            ^
+     21|     unitById(s, 'seer').pos = { x: 4, y: 3 };
+     22|     expect(partyFocus(s, u, 'expert')?.id).toBe('seer');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 11 passed (12)
+   Start at  11:34:30
+   Duration  261ms (tests 53%, transform 32%, import 13%, worker 2%)
+
