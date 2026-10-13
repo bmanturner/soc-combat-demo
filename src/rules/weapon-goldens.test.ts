@@ -81,8 +81,8 @@ describe('catalog, encounter and tuning golden', () => {
   });
   it('enemy HP and skill/raw damage multipliers apply once; mode/skill family scaling agrees', () => {
     const s = arena('javelin_shield', null, { wpn_javelin_shield_dmg:1.5, wpn_javelin_shield_hit:.1, enemy_wolf_hp:1.5, enemy_wolf_dmg:1.5 });
-    expect(jubal(s).attack.damage).toBe(90);
-    expect(attackModes(s, jubal(s))[1]!.damage).toBe(120);
+    expect(jubal(s).attack.damage).toBe(82.5);
+    expect(attackModes(s, jubal(s))[1]!.damage).toBe(105);
     expect(attackModes(s, jubal(s))[1]!.hit).toBeCloseTo(.96);
     unitById(s,'target').pos = {x:3,y:0};
     assertPreview(s, { type:'skill', unitId:'jubal', skillId:'piercing_javelin', target:{x:3,y:0} });

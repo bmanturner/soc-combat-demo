@@ -12,6 +12,13 @@ const TUNING_DEFAULTS = Object.fromEntries([
   ...PLAYER_FAMILIES.flatMap(f => [[`wpn_${f}_dmg`, 1], [`wpn_${f}_hit`, 0]]),
   ...ENEMY_TEMPLATES.flatMap(f => [[`enemy_${f}_hp`, 1], [`enemy_${f}_dmg`, 1]]),
 ]) as Tuning;
+const ENEMY_BALANCE_WHY: Partial<Record<keyof Tuning, string>> = {
+  enemy_small_rat_dmg: '1→.8: tutorial safety margin for slow starters; 100-seed pre-budget candidate raised axe wins 97.5% baseline (40 seeds) to 100%, HP 61.2→70.6%. Final confirmation in BALANCE.md.',
+  enemy_cultist_fighter_dmg: '1→.5 together with seer damage: reduces the light-armor dagger attrition outlier without changing its source pattern. Intermediate .55 candidate still had 25.90pp light HP spread (target ≤25). See BALANCE.md.',
+  enemy_cultist_mage_dmg: '1→.5 together with zealot damage: limits control-plus-damage punishment. Intermediate .55 candidate still had 25.90pp expert light HP spread; final 100-seed evidence in BALANCE.md.',
+  enemy_nephilim_hp: '1→.9: compensates lower isolated weapon budgets, not a free global party buff. Paired with 1200 AP deadline and readable 100 AP sweeps; 40-seed candidate novice win 47.04% vs baseline 18.70%. See BALANCE.md.',
+};
+
 export interface RulesConfig extends Tuning {
   proficientAllWeapons: boolean;
   unlockSpecialWeapons: boolean;
@@ -80,6 +87,10 @@ export interface RulesConfig extends Tuning {
 
 export const DEFAULT_CONFIG: RulesConfig = {
   ...TUNING_DEFAULTS,
+  enemy_small_rat_dmg: .8,
+  enemy_cultist_fighter_dmg: .5,
+  enemy_cultist_mage_dmg: .5,
+  enemy_nephilim_hp: .9,
   proficientAllWeapons: true,
   unlockSpecialWeapons: true,
   crossbowReload: 'flexible',
@@ -119,15 +130,15 @@ export const DEFAULT_CONFIG: RulesConfig = {
   dazedPushback: 50,
   bossDazeMult: 0.5,
   bossTurnAp: 100,
-  sweepDelay: 75,
+  sweepDelay: 100,
   sweepDepth: 3,
-  sweepDamage: 500,
+  sweepDamage: 350,
   sweepArmorPen: 0.5,
-  rockThrowDamage: 170,
+  rockThrowDamage: 150,
   rockfallDelay: 100,
   rockfallDamage: 220,
   coverCampTurns: 2,
-  bossBreakFreeAt: 1300,
+  bossBreakFreeAt: 1200,
   wolfPackFear: true,
   playerDamageMult: 1,
   enemyDamageMult: 1,
@@ -157,7 +168,7 @@ export const SETTINGS: SettingDef[] = [
     { key: `wpn_${f}_dmg`, label: `${f} damage`, group: 'Weapon tuning', type: 'number', min: .5, max: 1.5, step: .05, unit: 'x', status: 'demo', why: 'Scales every mode and item skill once. Base damage remains in content; this is a sandbox balance control.' },
     { key: `wpn_${f}_hit`, label: `${f} accuracy`, group: 'Weapon tuning', type: 'number', min: -.2, max: .2, step: .01, unit: '%', status: 'demo', why: 'Additive hit modifier for every family mode and skill; final hit chance is clamped by the shared resolver.' },
   ]),
-  ...ENEMY_TEMPLATES.flatMap((f): SettingDef[] => ['hp', 'dmg'].map(k => ({ key: `enemy_${f}_${k}` as keyof RulesConfig, label: `${f} ${k}`, group: 'Enemy tuning', type: 'number', min: .5, max: 1.5, step: .05, unit: 'x', status: 'demo', why: 'Per-template multiplier on authored base numbers, applied once alongside the global enemy multiplier.' }))),
+  ...ENEMY_TEMPLATES.flatMap((f): SettingDef[] => ['hp', 'dmg'].map(k => ({ key: `enemy_${f}_${k}` as keyof RulesConfig, label: `${f} ${k}`, group: 'Enemy tuning', type: 'number', min: .5, max: 1.5, step: .05, unit: 'x', status: 'demo', why: ENEMY_BALANCE_WHY[`enemy_${f}_${k}` as keyof Tuning] ?? 'Per-template multiplier on authored base numbers, applied once alongside the global enemy multiplier.' }))),
   // Timeline
   { key: 'movementBudget', label: 'Movement AP per turn', group: 'Timeline', type: 'number', min: 20, max: 100, step: 5, unit: 'AP', status: 'source', why: 'Aaron: movement turns cap at 50 AP → 5/4/3 tiles for light/medium/heavy.' },
   { key: 'autoEndTurn', label: 'Auto-end exhausted turns', group: 'Timeline', type: 'boolean', status: 'demo', why: 'After acting, end automatically when movement is locked or less than one tile remains. Toggle off for manual timing experiments.' },
@@ -200,15 +211,15 @@ export const SETTINGS: SettingDef[] = [
   { key: 'dazedPushback', label: 'Dazed: timeline pushback', group: 'Status', type: 'number', min: 0, max: 150, step: 5, unit: 'AP', status: 'demo', why: 'Undefined. In an AP game the natural "daze" is lost time: +AP on the timeline, and no reactions until your next turn ends.' },
   { key: 'bossDazeMult', label: 'Bosses: daze effectiveness', group: 'Status', type: 'number', min: 0, max: 1, step: 0.05, unit: 'x', status: 'demo', why: 'Massive enemies shrug off half the pushback, so dazing the boss is a tactic, not a lock.' },
   // Boss
-  { key: 'bossTurnAp', label: 'Nephilim acts every', group: 'Nephilim', type: 'number', min: 50, max: 200, step: 5, unit: 'AP', status: 'demo', why: 'Undefined. Every 100 AP gives a readable rhythm against the 75 AP sweep.' },
-  { key: 'sweepDelay', label: 'Sweep telegraph delay', group: 'Nephilim', type: 'number', min: 25, max: 150, step: 5, unit: 'AP', status: 'tentative', why: 'Tentative Math default. Its escape analysis used the wrong model, so tune it here.' },
+  { key: 'bossTurnAp', label: 'Nephilim acts every', group: 'Nephilim', type: 'number', min: 50, max: 200, step: 5, unit: 'AP', status: 'demo', why: 'Undefined. Every 100 AP gives a readable rhythm against the 100 AP demo sweep delay.' },
+  { key: 'sweepDelay', label: 'Sweep telegraph delay', group: 'Nephilim', type: 'number', min: 25, max: 150, step: 5, unit: 'AP', status: 'demo', why: 'Tentative 75→100 AP for a readable response window. Alongside damage 500→350, rock 170→150, HP ×.9 and deadline 1200: 40-seed novice boss win 47.04%, slow colossal 25%, rather than baseline 0% colossal. 150 AP made the boss trivial; see BALANCE.md.' },
   { key: 'sweepDepth', label: 'Sweep zone depth', group: 'Nephilim', type: 'number', min: 1, max: 6, step: 1, unit: 'tiles', status: 'demo', why: 'The real lever: at 3 every armor can escape with good timing; at 4+ heavy armor deep in the zone cannot.' },
-  { key: 'sweepDamage', label: 'Sweep raw damage', group: 'Nephilim', type: 'number', min: 100, max: 1000, step: 25, unit: 'dmg', status: 'demo', why: 'Aaron: overwhelming, possibly one-shot. 500 raw with 50% armor pen kills any Act One loadout.' },
+  { key: 'sweepDamage', label: 'Sweep raw damage', group: 'Nephilim', type: 'number', min: 100, max: 1000, step: 25, unit: 'dmg', status: 'demo', why: 'Aaron: overwhelming, possibly one-shot. Demo 500→350: remains lethal to light armor, but medium/heavy can survive one mistake. Paired tuning produced 47.04% novice boss wins at 40 seeds/armor; see BALANCE.md.' },
   { key: 'sweepArmorPen', label: 'Sweep armor penetration', group: 'Nephilim', type: 'number', min: 0, max: 1, step: 0.05, unit: '%', status: 'demo', why: 'Keeps heavy armor from shrugging off the lesson.' },
-  { key: 'rockThrowDamage', label: 'Rock throw raw damage', group: 'Nephilim', type: 'number', min: 0, max: 300, step: 10, unit: 'dmg', status: 'demo', why: 'Punishes exposed units without one-shotting them. Tuned up from 130: at 130 a disciplined party finished with ~80% HP and the boss was easier than the cultists.' },
+  { key: 'rockThrowDamage', label: 'Rock throw raw damage', group: 'Nephilim', type: 'number', min: 0, max: 300, step: 10, unit: 'dmg', status: 'demo', why: 'Demo 170→150: maintain exposed-ranged pressure without the baseline bow boss outlier (75% expert wins). Paired candidate improved bow to 89.17% expert at 40 seeds/armor; see BALANCE.md, not an isolated causal claim.' },
   { key: 'rockfallDelay', label: 'Rockfall-behind-cover delay', group: 'Nephilim', type: 'number', min: 25, max: 200, step: 5, unit: 'AP', status: 'demo', why: 'Aaron: delayed AoE that flushes cover campers. Delay undefined.' },
   { key: 'rockfallDamage', label: 'Rockfall raw damage', group: 'Nephilim', type: 'number', min: 0, max: 500, step: 10, unit: 'dmg', status: 'demo', why: 'Hurts badly but is survivable once.' },
-  { key: 'bossBreakFreeAt', label: 'Nephilim tears free at (0 = never)', group: 'Nephilim', type: 'number', min: 0, max: 5000, step: 100, unit: 'AP', status: 'demo', why: 'Aaron: kill him "before he can escape, while he is still trapped and vulnerable." A visible clock makes playing too safe a losing strategy: AP discipline, not AP hoarding. 1300 (tuned from 1800, which never triggered): the bot finishes in ~950–1150 AP, so slow heavy builds now lose some runs.' },
+  { key: 'bossBreakFreeAt', label: 'Nephilim tears free at (0 = never)', group: 'Nephilim', type: 'number', min: 0, max: 5000, step: 100, unit: 'AP', status: 'demo', why: 'Aaron: kill him before he escapes. Demo deadline 1300→1200 compensates the longer warning and lower boss HP; retains a real race. Paired 40-seed candidate expert family wins 89.17–98.33% vs several near-perfect baseline families. Final evidence in BALANCE.md.' },
   { key: 'coverCampTurns', label: 'Boss turns before flushing cover', group: 'Nephilim', type: 'number', min: 1, max: 5, step: 1, unit: 'turns', status: 'demo', why: 'Boss turns a ranged unit may hide unseen before rockfall targets it.' },
   // Encounter knobs
   { key: 'wolfPackFear', label: 'Wolves scatter when one dies', group: 'Encounters', type: 'boolean', status: 'source', why: "Aaron's possible pack mechanic: survivors flee for a turn, then regroup." },

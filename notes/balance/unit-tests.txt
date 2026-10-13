@@ -1,0 +1,28 @@
+
+ RUN  v5.0.4 /home/needz/Dev/personal/soc-fix/balance
+
+ ❯ src/game/preview-parity.test.ts (7 tests | 1 failed) 42ms
+   ❯ HUD and engine parity (7)
+     × anticipated sweep danger honors impact equality (false units first) 6ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/game/preview-parity.test.ts > HUD and engine parity > anticipated sweep danger honors impact equality (false units first)
+AssertionError: expected 'none' to be 'risk' // Object.is equality
+
+Expected: "risk"
+Received: "none"
+
+ ❯ src/game/preview-parity.test.ts:32:51
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 13 passed (14)
+      Tests  1 failed | 195 passed (196)
+   Start at  11:23:35
+   Duration  14.94s (tests 94%, transform 3%, import 2%)
+
+
+EXIT_CODE=1

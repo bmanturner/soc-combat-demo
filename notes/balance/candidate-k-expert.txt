@@ -1,0 +1,10 @@
+policy: expert; trials per cell: 100; overrides: {"enemy_small_rat_dmg":0.8}
+encounter weapon armor win% hp% stalls illegal reloads swaps damage/100AP
+granary daggers clothing 100.0 90.2 0 0 0 0 {"daggers":30.309153364316025}
+ROW {"encounter":"granary","weaponIds":["daggers",null],"armor":"clothing","policy":"expert","trials":100,"wins":100,"winPct":100,"hpPct":90.23333333333339,"stalls":0,"illegal":0,"reloads":0,"swaps":0,"damage100Ap":{"daggers":30.309153364316025},"weaponStats":{"daggers":{"damage":7500,"ap":24745,"turns":394}},"kos":0,"turns":3.94,"clock":208.3,"caught":0,"escapes":0,"moveShare":0.10145462311845438}
+granary shield clothing 100.0 80.5 0 0 0 0 {"shield":20.961430967020682}
+ROW {"encounter":"granary","weaponIds":["shield",null],"armor":"clothing","policy":"expert","trials":100,"wins":100,"winPct":100,"hpPct":80.51666666666667,"stalls":0,"illegal":0,"reloads":0,"swaps":0,"damage100Ap":{"shield":20.961430967020682},"weaponStats":{"shield":{"damage":7500,"ap":35780,"turns":408}},"kos":0,"turns":4.08,"clock":326.65,"caught":0,"escapes":0,"moveShare":0.15236128632473733}
+granary polearm clothing 100.0 84.6 0 0 0 0 {"polearm":20.27027027027027}
+ROW {"encounter":"granary","weaponIds":["polearm",null],"armor":"clothing","policy":"expert","trials":100,"wins":100,"winPct":100,"hpPct":84.56666666666668,"stalls":0,"illegal":0,"reloads":0,"swaps":0,"damage100Ap":{"polearm":20.27027027027027},"weaponStats":{"polearm":{"damage":7500,"ap":37000,"turns":320}},"kos":0,"turns":3.2,"clock":284,"caught":0,"escapes":0,"moveShare":0.14887778887778874}
+granary two_handed clothing 100.0 70.6 0 0 0 0 {"two_handed":14.713094654242276}
+ROW {"encounter":"granary","weaponIds":["two_handed",null],"armor":"clothing","policy":"expert","trials":100,"wins":100,"winPct":100,"hpPct":70.56666666666668,"stalls":0,"illegal":0,"reloads":0,"swaps":0,"damage100Ap":{"two_handed":14.713094654242276},"weaponStats":{"two_handed":{"damage":7500,"ap":50975,"turns":339}},"kos":0,"turns":3.39,"clock":404.85,"caught":0,"escapes":0,"moveShare":0.12930068617267193}
