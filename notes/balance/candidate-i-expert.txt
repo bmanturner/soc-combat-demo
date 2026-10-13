@@ -1,0 +1,8 @@
+policy: expert; trials per cell: 40; overrides: {"enemy_cultist_mage_dmg":0.75,"enemy_cultist_fighter_dmg":0.75}
+encounter weapon armor win% hp% stalls illegal reloads swaps damage/100AP
+cultists daggers light 92.5 34.0 0 0 0 0 {"daggers":30.397930760047753}
+ROW {"encounter":"cultists","weaponIds":["daggers",null],"armor":"light","policy":"expert","trials":40,"wins":37,"winPct":92.5,"hpPct":33.95380434782608,"stalls":0,"illegal":0,"reloads":0,"swaps":0,"damage100Ap":{"daggers":30.397930760047753},"weaponStats":{"daggers":{"damage":7639,"ap":25130,"turns":325}},"kos":0.325,"turns":6.2875,"clock":675.125,"caught":1.05,"escapes":1.55,"moveShare":0.15937171237262698}
+cultists daggers medium 100.0 63.2 0 0 0 0 {"daggers":28.075396825396826}
+ROW {"encounter":"cultists","weaponIds":["daggers",null],"armor":"medium","policy":"expert","trials":40,"wins":40,"winPct":100,"hpPct":63.17934782608694,"stalls":0,"illegal":0,"reloads":0,"swaps":0,"damage100Ap":{"daggers":28.075396825396826},"weaponStats":{"daggers":{"damage":7075,"ap":25200,"turns":341}},"kos":0.05,"turns":6.3,"clock":604.8125,"caught":0.05,"escapes":0.975,"moveShare":0.17337970799098723}
+cultists daggers heavy 100.0 67.8 0 0 0 0 {"daggers":30.72015281757402}
+ROW {"encounter":"cultists","weaponIds":["daggers",null],"armor":"heavy","policy":"expert","trials":40,"wins":40,"winPct":100,"hpPct":67.77173913043478,"stalls":0,"illegal":0,"reloads":0,"swaps":0,"damage100Ap":{"daggers":30.72015281757402},"weaponStats":{"daggers":{"damage":8041,"ap":26175,"turns":376}},"kos":0.025,"turns":6.725,"clock":617.375,"caught":0.075,"escapes":1.075,"moveShare":0.1645185178018707}

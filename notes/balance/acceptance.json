@@ -1,0 +1,27 @@
+[
+  {
+    "id": "T1",
+    "status": "met",
+    "evidence": "Minimum win 100.00%, minimum HP 70.57% across both policies."
+  },
+  {
+    "id": "T2",
+    "status": "met",
+    "evidence": "Maximum HP spread 21.26 pp; see every armor row below."
+  },
+  {
+    "id": "T3",
+    "status": "met",
+    "evidence": "Expert family win range 86.00\u201397.00%, max mean HP 88.22%; novice overall 45.89%, family minimum 21.00%."
+  },
+  {
+    "id": "T4",
+    "status": "met",
+    "evidence": "All nine families meet no-reaction single-target bands in tools/balance-math.ts and nine executable budget tests. Source AP, patterns, ranges, penalties and reaction identities unchanged."
+  },
+  {
+    "id": "T5",
+    "status": "met",
+    "evidence": "26680 final/combination battles, 0 stalls, 0 illegal fallbacks; 16579 reloads and 1405 swaps."
+  }
+]
