@@ -1,13 +1,22 @@
 // Balance sim: bots play every encounter with every starter weapon (and armor where allowed).
-// Usage: npm run sim -- [trials=40] [encounter]
+// Usage: npm run sim -- [trials=40] [encounter|all] [setting=value ...]
+//   e.g. npm run sim -- 40 nephilim bossBreakFreeAt=1300 sweepDelay=60
 
 import { ENCOUNTERS } from '../src/content/encounters';
-import { DEFAULT_CONFIG } from '../src/rules/config';
+import { withOverrides, type RulesConfig } from '../src/rules/config';
 import { runBattle } from '../src/rules/sim';
 import type { ArmorClass } from '../src/rules/types';
 
 const trials = Number(process.argv[2] ?? 40);
-const only = process.argv[3];
+const only = process.argv[3] && process.argv[3] !== 'all' ? process.argv[3] : undefined;
+const overrides: Record<string, unknown> = {};
+for (const arg of process.argv.slice(4)) {
+  const [k, v] = arg.split('=');
+  if (!k || v === undefined) continue;
+  overrides[k] = v === 'true' ? true : v === 'false' ? false : Number.isNaN(Number(v)) ? v : Number(v);
+}
+const config = withOverrides(overrides as Partial<RulesConfig>);
+if (Object.keys(overrides).length) console.log('overrides:', JSON.stringify(overrides));
 const weapons = ['daggers', 'shield', 'polearm', 'two_handed'];
 
 const pct = (n: number) => `${(n * 100).toFixed(0)}%`.padStart(5);
@@ -22,7 +31,7 @@ for (const enc of ENCOUNTERS) {
     for (const armor of armors) {
       let wins = 0, stalls = 0, hp = 0, kos = 0, turns = 0, clock = 0, caught = 0, escapes = 0, move = 0;
       for (let i = 0; i < trials; i++) {
-        const r = runBattle(enc.id, { weaponId, armor }, DEFAULT_CONFIG, 1000 + i);
+        const r = runBattle(enc.id, { weaponId, armor }, config, 1000 + i);
         if (r.outcome === 'victory') wins++;
         if (r.outcome === 'stalled') stalls++;
         hp += r.partyHpPct;
