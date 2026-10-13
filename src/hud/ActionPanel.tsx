@@ -44,8 +44,8 @@ export function UnitCard({ unit, battle, compact = false }: { unit: UnitState; b
           {!unit.ko && <span>Acts in {Math.round(nextIn)} AP</span>}
         </div>
       )}
-      <Provenance value={UNITS[unit.templateId] ?? unit} />
-      <Provenance value={ARMOR[unit.armorClass]} />
+      <Provenance value={UNITS[unit.templateId] ?? unit} label="Unit" />
+      <Provenance value={ARMOR[unit.armorClass]} label="Armor" />
       <div className="uc-weapon">
         <b>{weapon?.name ?? unit.attack.name} · {selected.name}</b> · {basicAttackApCost(battle, unit, selected.id)} AP · {PATTERN_TEXT[selected.pattern]}
         {selected.range && ` · range ${selected.range[0]}–${selected.range[1]}`} · {Math.round(selected.damage)} dmg · {pct(selected.hit)} hit

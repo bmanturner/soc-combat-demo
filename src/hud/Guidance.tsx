@@ -16,7 +16,7 @@ export function GranaryGuide() {
   </div>;
 }
 
-export function Provenance({ value }: { value: object }) {
+export function Provenance({ value, label }: { value: object; label?: string }) {
   const p = (value as { provenance?: { concept: string; numbers: string; why?: string } }).provenance;
-  return p ? <small className="provenance" title={p.why}>Concept: {p.concept} · numbers: {p.numbers}</small> : null;
+  return p ? <small className="provenance" title={p.why}>{label ? `${label} · ` : ''}Concept: {p.concept} · numbers: {p.numbers}</small> : null;
 }

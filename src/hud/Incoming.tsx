@@ -53,7 +53,7 @@ export function IncomingPanel() {
             Nephilim acts in <b>{Math.round(threat.bossActsIn)}</b> AP
           </div>
           <div className="muted">
-            Anyone in the sweep zone then gets a sweep landing at <b>{Math.round(threat.landsIn)}</b>. To be safe there, your next turn must come first.
+            Anyone in the sweep zone then gets a sweep landing <b>{Math.round(threat.landsIn)}</b> AP from now. To be safe there, your next turn must come first.
           </div>
           {party.map((u) => {
             const isActive = battle.active?.unitId === u.id;

@@ -71,6 +71,7 @@ export function Setup() {
         {editingSlot === 1 && <button onClick={() => controller.setLoadout({ secondaryWeaponId: null, equippedSlot: 0 })}>No secondary</button>}
         <label>Start equipped <select aria-label="Start equipped" value={equippedSlot} onChange={e => controller.setLoadout({ equippedSlot: Number(e.target.value) as 0 | 1 })}><option value={0}>Primary</option><option value={1} disabled={!secondaryWeaponId}>Secondary</option></select></label>
       </div>}
+      {enc.id !== 'granary' && <p className="muted">Pick the slot above (Primary or Secondary), then click a weapon card to put it in that slot. Swapping in a fight costs your action.</p>}
       <p className="muted">Patterns: blue = you · solid orange = primary/affected tiles · dashed = one random secondary · dark = out of range. Directional shapes rotate with aim; sweep always surrounds you.</p>
       <div className="choice-grid">
         {availableWeapons(enc, { ...config, unlockSpecialWeapons: true }).map((w) => {
