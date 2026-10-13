@@ -14,28 +14,28 @@ export const ARMOR: Record<ArmorClass, ArmorDef> = {
 const phys = { damageType: 'physical' as const, ranged: false };
 
 const WEAPON_SEEDS: Record<string, Omit<WeaponDef, 'modes' | 'basicSkill' | 'proficiencySkill' | 'provenance' | 'fieldProvenance'>> = {
-  // ---- Jubal's four melee starters [source patterns + AP], damage/hit [tentative], pen/reactions [demo]
+  // ---- Jubal's four melee starters: source patterns/AP; retuned demo damage; demo hit, pen and reactions.
   daggers: {
     id: 'daggers', name: 'Bronze Daggers', family: 'daggers',
-    attack: { name: 'Dagger strike', pattern: 'cardinal', apCost: 50, damage: 45, hit: 0.88, pctPen: 0, flatPen: 15, ...phys },
+    attack: { name: 'Dagger strike', pattern: 'cardinal', apCost: 50, damage: 38, hit: 0.88, pctPen: 0, flatPen: 15, ...phys },
     canEngage: true, engagement: 0, disengagement: 4, parry: 0.05, block: 0, dodgeBonus: 0.05, skills: ['throwing_knife'],
     blurb: 'Hits one tile N/E/S/W. Fast and slippery in melee.',
   },
   shield: {
     id: 'shield', name: 'Sword & Shield', family: 'shield',
-    attack: { name: 'Sword strike', pattern: 'pairCw', apCost: 75, damage: 60, hit: 0.86, pctPen: 0, flatPen: 10, ...phys },
+    attack: { name: 'Sword strike', pattern: 'pairCw', apCost: 75, damage: 55, hit: 0.86, pctPen: 0, flatPen: 10, ...phys },
     canEngage: true, engagement: 5, disengagement: 0, parry: 0.05, block: 0.3, dodgeBonus: 0, skills: ['shield_bash'],
     blurb: 'Hits the target tile + the next tile clockwise. Blocks. Pins enemies in place.',
   },
   polearm: {
     id: 'polearm', name: 'Bronze Spear', family: 'polearm',
-    attack: { name: 'Spear thrust', pattern: 'line2', apCost: 100, damage: 85, hit: 0.84, pctPen: 0.1, flatPen: 10, ...phys },
+    attack: { name: 'Spear thrust', pattern: 'line2', apCost: 100, damage: 72, hit: 0.84, pctPen: 0.1, flatPen: 10, ...phys },
     canEngage: true, engagement: 3, disengagement: 2, parry: 0.1, block: 0, dodgeBonus: 0, skills: ['hook'],
     blurb: 'Hits two tiles in a straight line. Reach lets you strike from outside the danger.',
   },
   two_handed: {
     id: 'two_handed', name: 'Two-Handed Axe', family: 'two_handed',
-    attack: { name: 'Great swing', pattern: 'arc5', apCost: 125, damage: 115, hit: 0.78, pctPen: 0.2, flatPen: 10, ...phys },
+    attack: { name: 'Great swing', pattern: 'arc5', apCost: 125, damage: 101, hit: 0.78, pctPen: 0.2, flatPen: 10, ...phys },
     canEngage: true, engagement: 3, disengagement: 1, parry: 0.1, block: 0, dodgeBonus: 0, skills: ['overhead_smash'],
     blurb: 'Hits five of the eight tiles around you. Heavy damage, slow commitment.',
   },
@@ -48,31 +48,31 @@ const WEAPON_SEEDS: Record<string, Omit<WeaponDef, 'modes' | 'basicSkill' | 'pro
   },
   hunting_bow: {
     id: 'hunting_bow', name: 'Hunting Bow', family: 'bow',
-    attack: { name: 'Arrow', pattern: 'ranged', apCost: 75, stationaryDiscount: true, range: [2, 10], damage: 65, hit: 0.87, pctPen: 0, flatPen: 10, damageType: 'physical', ranged: true },
+    attack: { name: 'Arrow', pattern: 'ranged', apCost: 75, stationaryDiscount: true, range: [2, 10], damage: 58, hit: 0.87, pctPen: 0, flatPen: 10, damageType: 'physical', ranged: true },
     canEngage: false, engagement: 0, disengagement: 2, parry: 0, block: 0, dodgeBonus: 0, skills: ['aimed_shot'],
     blurb: 'Long ranged reach with a stationary discount. Movement adds the configured bow surcharge. Cannot engage.',
   },
   crossbow: {
     id: 'crossbow', name: 'Bronze Crossbow', family: 'crossbow',
-    attack: { name: 'Bolt', pattern: 'ranged', apCost: 50, range: [1, 6], damage: 85, hit: .85, pctPen: .15, flatPen: 5, damageType: 'physical', ranged: true },
+    attack: { name: 'Bolt', pattern: 'ranged', apCost: 50, range: [1, 6], damage: 79, hit: .85, pctPen: .15, flatPen: 5, damageType: 'physical', ranged: true },
     reloadAp: 50, canEngage: false, engagement: 0, disengagement: 2, parry: 0, block: 0, dodgeBonus: 0, skills: ['steady_bolt', 'breaching_bolt'],
     blurb: 'A loaded frontline opener. A paid reload separates shots.',
   },
   dual_wield: {
     id: 'dual_wield', name: 'Dual Blades', family: 'dual_wield', access: 'savage+rogue',
-    attack: { name: 'Dual strike', pattern: 'dualArc', apCost: 100, damage: 42, hit: .85, pctPen: 0, flatPen: 10, ...phys },
+    attack: { name: 'Dual strike', pattern: 'dualArc', apCost: 100, damage: 40, hit: .85, pctPen: 0, flatPen: 10, ...phys },
     canEngage: true, engagement: 2, disengagement: 3, parry: .08, block: 0, dodgeBonus: .03, skills: ['measured_cut', 'disorient'],
     blurb: 'A primary strike then one random living enemy in the five-cell arc.',
   },
   javelin_shield: {
     id: 'javelin_shield', name: 'Javelin & Shield', family: 'javelin_shield', access: 'soldier+rogue',
-    attack: { name: 'Javelin thrust', pattern: 'adjacent', apCost: 75, damage: 60, hit: .86, pctPen: 0, flatPen: 10, ...phys },
+    attack: { name: 'Javelin thrust', pattern: 'adjacent', apCost: 75, damage: 55, hit: .86, pctPen: 0, flatPen: 10, ...phys },
     canEngage: true, engagement: 4, disengagement: 1, parry: .05, block: .25, dodgeBonus: 0, skills: ['shield_check', 'piercing_javelin'],
     blurb: 'Thrust or throw; the shield and melee threat remain. Unlimited throws (demo).',
   },
   colossal: {
     id: 'colossal', name: 'Colossal Hammer', family: 'colossal', access: 'soldier+savage',
-    attack: { name: 'Colossal line', pattern: 'line2', apCost: 175, damage: 135, hit: .72, pctPen: .25, flatPen: 0, ...phys },
+    attack: { name: 'Colossal line', pattern: 'line2', apCost: 175, damage: 130, hit: .72, pctPen: .25, flatPen: 0, ...phys },
     canEngage: true, engagement: 4, disengagement: 0, parry: .10, block: 0, dodgeBonus: 0, skills: ['crushing_blow', 'stunning_impact'],
     blurb: 'A straight line or every adjacent tile. No two-handed side accuracy penalties.',
   },
@@ -127,13 +127,24 @@ function profileFields(mode: AttackMode, family: string, source: boolean, tentat
       : DEMO_FIELD,
   ]));
 }
+const BALANCE_DAMAGE: Record<string, string> = {
+  daggers: '45→38; isolated no-reaction damage/100 AP 81.22→68.55.',
+  shield: '60→55; isolated no-reaction damage/100 AP 70.52→64.67.',
+  polearm: '85→72; isolated no-reaction damage/100 AP 73.21→61.99. The intermediate 75-damage candidate still won 98.33% expert boss trials (40 seeds/armor).',
+  two_handed: '115→101; isolated no-reaction damage/100 AP 73.57→64.62; side penalties unchanged.',
+  hunting_bow: '65→58; isolated stationary damage/100 AP 77.31→68.96; also affects the companion bow.',
+  crossbow: '85→79; fire+reload damage/100 AP 74.08→68.85. The intermediate 80-damage confirmation won 97.33% expert boss trials; 79 reduced that to 97.00% at 100 seeds/armor.',
+  dual_wield: '42→40 per strike; two-hit damage/100 AP 73.18→69.70. Do not confuse low realized bot throughput with basic damage budget.',
+  javelin_shield: 'Thrust 60→55, throw 80→70; damage/100 AP 64.67 and 49.36.',
+  colossal: '135→130; single-target damage/100 AP 56.94→54.82; 175 AP and huge AoE unchanged.',
+};
 const SECOND_SKILLS: Record<string, string> = { daggers: 'precision_stab', shield: 'sundering_blow', polearm: 'piercing_cast', two_handed: 'staggering_blow', hunting_bow: 'piercing_arrow' };
 export const PLAYER_WEAPON_IDS = ['daggers', 'shield', 'polearm', 'two_handed', 'hunting_bow', 'crossbow', 'dual_wield', 'javelin_shield', 'colossal'] as const;
 export const WEAPONS: Record<string, WeaponDef> = Object.fromEntries(Object.values(WEAPON_SEEDS).map(w => {
   const skills = SECOND_SKILLS[w.id] ? [...w.skills, SECOND_SKILLS[w.id]!] : w.skills;
   const id = w.family === 'crossbow' ? 'fire' : w.family === 'javelin_shield' ? 'thrust' : w.family === 'colossal' ? 'line' : 'basic';
   const modes: WeaponDef['modes'] = w.family === 'javelin_shield'
-    ? [{ ...w.attack, id }, { ...w.attack, id: 'throw', name: 'Javelin throw', pattern: 'ranged', range: [2, 4], apCost: 125, damage: 80, ranged: true }]
+    ? [{ ...w.attack, id }, { ...w.attack, id: 'throw', name: 'Javelin throw', pattern: 'ranged', range: [2, 4], apCost: 125, damage: 70, ranged: true }]
     : w.family === 'colossal' ? [{ ...w.attack, id }, { ...w.attack, id: 'sweep', name: 'Colossal sweep', pattern: 'ring8' }]
     : [{ ...w.attack, id, ...(w.family === 'crossbow' ? { ammo: 'bolt' as const } : {}) }];
   const tentative = ['daggers', 'shield', 'polearm', 'two_handed', 'hunting_bow', 'crossbow'].includes(w.id);
@@ -141,8 +152,14 @@ export const WEAPONS: Record<string, WeaponDef> = Object.fromEntries(Object.valu
   const fields: Record<string, FieldProvenance> = Object.fromEntries([...Object.keys(w), 'basicSkill', 'proficiencySkill'].map(k => [k, DEMO_FIELD]));
   if (w.reloadAp) fields.reloadAp = sourceField('“On their next turn, they need to use a combat action to reload it, which also costs 50 AP.”');
   const fieldProvenance = { fields, attack: profileFields(modes[0]!, w.family, source, tentative), modes: Object.fromEntries(modes.map(m => [m.id, profileFields(m, w.family, source, tentative)])) };
+  const balanceWhy = BALANCE_DAMAGE[w.id];
+  if (balanceWhy) {
+    const damage: FieldProvenance = { owner: 'demo', status: 'demo', why: `${balanceWhy} See notes/balance/BALANCE.md; source AP, ranges and patterns unchanged.` };
+    fieldProvenance.attack.damage = damage;
+    for (const mode of Object.values(fieldProvenance.modes)) mode.damage = damage;
+  }
   return [w.id, { ...w, modes, skills, fieldProvenance, basicSkill: skills[0] ?? null, proficiencySkill: skills[1] ?? null,
-    provenance: { concept: PLAYER_WEAPON_IDS.some(x => x === w.id) || w.id === 'shepherds_club' ? 'source' : 'demo', numbers: tentative ? 'tentative' : 'demo', why: 'Concept: Aaron weapon notes. Raw damage: Drafts/09 where present; accuracy, penetration and defenses are demo proposals. New special damage and all skill numbers are demo.' } }];
+    provenance: { concept: PLAYER_WEAPON_IDS.some(x => x === w.id) || w.id === 'shepherds_club' ? 'source' : 'demo', numbers: balanceWhy ? 'demo' : tentative ? 'tentative' : 'demo', why: balanceWhy ? `Demo balance: ${balanceWhy} See notes/balance/BALANCE.md.` : 'Concept: Aaron weapon notes. Raw damage: Drafts/09 where present; accuracy, penetration and defenses are demo proposals. New special damage and all skill numbers are demo.' } }];
 }));
 
 const SKILL_SEEDS: Record<string, Omit<SkillDef, 'provenance' | 'fieldProvenance'>> = {
@@ -160,7 +177,7 @@ const SKILL_SEEDS: Record<string, Omit<SkillDef, 'provenance' | 'fieldProvenance
   crushing_blow: { id: 'crushing_blow', name: 'Crushing Blow', kind: 'strike', modeId: 'line', apCost: 175, cooldown: 250, damageMult: 1.3, description: 'A concentrated adjacent blow.', status: 'demo' },
   stunning_impact: { id: 'stunning_impact', name: 'Stunning Impact', kind: 'strike', modeId: 'line', apCost: 200, cooldown: 350, damageMult: 1, applies: 'dazed', description: 'An adjacent blow that dazes.', status: 'demo' },
   // [source] concept: every weapon has a basic skill anyone can use. Specific skills are [demo] placeholders.
-  throwing_knife: { id: 'throwing_knife', name: 'Throwing Knife', kind: 'shot', apCost: 75, cooldown: 150, range: [2, 4], needsLos: true, damageMult: 0.6, description: 'A ranged knife to finish fleeing targets.', status: 'demo' },
+  throwing_knife: { id: 'throwing_knife', name: 'Throwing Knife', kind: 'shot', apCost: 75, cooldown: 150, range: [2, 4], needsLos: true, damageMult: 0.8, description: 'A ranged knife to finish fleeing targets.', status: 'demo' },
   shield_bash: { id: 'shield_bash', name: 'Shield Bash', kind: 'shove', apCost: 75, cooldown: 200, damageMult: 0.5, description: 'Adjacent shove. Slammed into something? Dazed.', status: 'demo' },
   hook: { id: 'hook', name: 'Hook', kind: 'hook', apCost: 100, cooldown: 200, range: [2, 2], damageMult: 0.5, description: 'A straight-line hook that drags the target next to you.', status: 'demo' },
   overhead_smash: { id: 'overhead_smash', name: 'Overhead Smash', kind: 'strike', apCost: 150, cooldown: 300, damageMult: 1.5, pctPenBonus: 0.3, hitBonus: -0.05, description: 'A committed adjacent strike with additional armor penetration.', status: 'demo' },
@@ -176,5 +193,5 @@ const SKILL_SEEDS: Record<string, Omit<SkillDef, 'provenance' | 'fieldProvenance
   hellfire_sigil: { id: 'hellfire_sigil', name: 'Hellfire Sigil', kind: 'sigil', allowedReactions: [], apCost: 125, cooldown: 350, range: [0, 6], damageMult: 1, rawDamage: 65, damageType: 'magic', delay: 100, radius: 1, description: 'Brands an area with delayed hellfire; friendly eligibility follows the configured rule.', status: 'demo' },
 };
 export const SKILLS: Record<string, SkillDef> = Object.fromEntries(Object.values(SKILL_SEEDS).map(s => [s.id, {
-  ...s, fieldProvenance: Object.fromEntries([...Object.keys(s), 'modeId'].map(k => [k, DEMO_FIELD])), modeId: s.modeId ?? 'basic', provenance: { concept: s.status, numbers: 'demo', why: s.status === 'source' ? 'Aaron names this concept; all numeric parameters are demo defaults.' : 'Demo completion of item-owned skills; not an authored skill-tree claim.' },
+  ...s, fieldProvenance: Object.fromEntries([...Object.keys(s), 'modeId'].map(k => [k, s.id === 'throwing_knife' && k === 'damageMult' ? { ...DEMO_FIELD, why: 'Demo multiplier .6→.8 offsets the dagger raw-budget reduction (knife raw 27→30.4) without increasing the source basic tempo. Not a claim that knife alone fixes cultists; see candidate-i and BALANCE.md.' } : DEMO_FIELD])), modeId: s.modeId ?? 'basic', provenance: { concept: s.status, numbers: 'demo', why: s.id === 'throwing_knife' ? 'Demo multiplier .6→.8: preserve ranged finishing utility while lowering basic raw damage. See notes/balance/BALANCE.md.' : s.status === 'source' ? 'Aaron names this concept; all numeric parameters are demo defaults.' : 'Demo completion of item-owned skills; not an authored skill-tree claim.' },
 }]));

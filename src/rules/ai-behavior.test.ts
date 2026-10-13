@@ -26,7 +26,7 @@ describe('AI intent regressions', () => {
   });
 
   it('novice ignores future boss sweeps but both policies react to visible telegraphs', () => {
-    const s = testBattle({ rows: OPEN_7x7, jubal: { x: 3, y: 3 }, weapon: 'polearm', enemies: [{ template: 'nephilim', id: 'boss', at: { x: 3, y: 1 }, initiative: 0 }], boss: { eye: { x: 3, y: 1 }, sweepCols: [1, 5], sweepRowStart: 2 } });
+    const s = testBattle({ rows: OPEN_7x7, jubal: { x: 3, y: 3 }, weapon: 'polearm', config: { sweepDelay: 75, sweepDamage: 500 }, enemies: [{ template: 'nephilim', id: 'boss', at: { x: 3, y: 1 }, initiative: 0 }], boss: { eye: { x: 3, y: 1 }, sweepCols: [1, 5], sweepRowStart: 2 } });
     s.active!.movementLocked = true;
     expect(botAction(s, 'expert').type).toBe('endTurn');
     expect(botAction(s, 'novice').type).not.toBe('endTurn');

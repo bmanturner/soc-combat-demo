@@ -1,6 +1,7 @@
 // Balance baseline: encounter-allowed single-family loadouts, optional two-slot combinations.
 // npx tsx tools/sim.ts 40 all policy=expert combos=1 crossbowReload=strict
 import { ENCOUNTERS } from '../src/content/encounters';
+import { PLAYER_WEAPON_IDS } from '../src/content/gear';
 import { availableWeapons } from '../src/rules/equipment';
 import { withOverrides, type RulesConfig } from '../src/rules/config';
 import { runBattle, type SimResult } from '../src/rules/sim';
@@ -11,9 +12,11 @@ if (!Number.isSafeInteger(trials) || trials < 1) throw new Error('positive integ
 const only = process.argv[3] && process.argv[3] !== 'all' ? process.argv[3] : undefined;
 const overrides: Record<string, unknown> = {};
 let policy: 'expert' | 'novice' = 'expert', combos = false;
+let weapons: string[] | undefined;
 for (const arg of process.argv.slice(4)) {
   const [k, v] = arg.split('=');
   if (!k || v === undefined) continue;
+  if (k === 'weapons') { weapons = v.split(','); continue; }
   if (k === 'combos') { combos = v === '1'; continue; }
   if (k === 'policy') {
     if (v !== 'expert' && v !== 'novice') throw new Error('policy must be expert or novice');
@@ -21,13 +24,16 @@ for (const arg of process.argv.slice(4)) {
   }
   overrides[k] = v === 'true' ? true : v === 'false' ? false : Number.isNaN(Number(v)) ? v : Number(v);
 }
+if (only && !ENCOUNTERS.some(enc => enc.id === only)) throw new Error('unknown encounter');
+if (weapons?.some(id => !PLAYER_WEAPON_IDS.some(w => w === id))) throw new Error('unknown weapon filter');
 const config = withOverrides(overrides as Partial<RulesConfig>);
-console.log(`policy: ${policy}; trials per cell: ${trials}; overrides: ${JSON.stringify(overrides)}`);
+console.log(`policy: ${policy}; trials per cell: ${trials}; weapons: ${weapons?.join(',') ?? 'all'}; overrides: ${JSON.stringify(overrides)}`);
+console.log(`CONFIG ${JSON.stringify(config)}`);
 console.log('encounter weapon armor win% hp% stalls illegal reloads swaps damage/100AP');
-let problems = 0;
+let problems = 0, cells = 0;
 for (const enc of ENCOUNTERS) {
   if (only && enc.id !== only) continue;
-  const allowed = availableWeapons(enc, config).map(w => w.id);
+  const allowed = availableWeapons(enc, config).map(w => w.id).filter(id => !weapons || weapons.includes(id));
   const loadouts: [string, string | null][] = allowed.map(w => [w, null]);
   if (combos && enc.id !== 'granary') {
     const pairs: [string, string | null][] = [['crossbow', 'shield'], ['crossbow', 'two_handed'], ['hunting_bow', 'daggers'], ['colossal', 'daggers']];
@@ -51,6 +57,7 @@ for (const enc of ENCOUNTERS) {
       if (r.illegalFallbacks) console.error(JSON.stringify(r.fallbacks));
       if (r.outcome === 'stalled') console.error(JSON.stringify({ encounter: enc.id, weaponIds, armor, seed: 1000 + i, reason: r.stallReason }));
     }
+    cells++;
     problems += stalls + illegal;
     const damage100Ap = Object.fromEntries(Object.entries(weaponStats).map(([id, s]) => [id, s.ap ? 100 * s.damage / s.ap : 0]));
     const row = { encounter: enc.id, weaponIds, armor, policy, trials, wins, winPct: 100 * wins / trials, hpPct: 100 * hp / trials, stalls, illegal, reloads, swaps, damage100Ap, weaponStats, kos: kos / trials, turns: turns / trials, clock: clock / trials, caught: caught / trials, escapes: escapes / trials, moveShare: move / trials };
@@ -58,4 +65,5 @@ for (const enc of ENCOUNTERS) {
     console.log(`ROW ${JSON.stringify(row)}`);
   }
 }
+if (!cells) throw new Error('filters selected no legal loadouts');
 if (problems) process.exitCode = 1;

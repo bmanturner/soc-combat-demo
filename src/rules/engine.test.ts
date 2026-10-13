@@ -28,7 +28,8 @@ function bossFight(o: { at: { x: number; y: number }; weapon: string; armor: 'li
     level: 5,
     enemies: [{ template: 'nephilim', at: { x: 5, y: 1 }, id: 'boss', initiative: o.bossInit ?? 30 }],
     boss: BOSS,
-    config: { critChance: 0, ...o.config },
+    // Freeze the proposal's demo sweep numbers; this golden tests AP/tie semantics, not balance defaults.
+    config: { critChance: 0, sweepDelay: 75, sweepDamage: 500, ...o.config },
   });
 }
 
