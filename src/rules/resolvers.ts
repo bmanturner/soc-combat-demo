@@ -47,6 +47,16 @@ export function delayedDamage(state: BattleState, effect: Pick<DelayedEffect, 'd
 export function allowedReactions(profile: { ranged?: boolean; allowedReactions?: ReactionResult['kind'][] }): ReactionResult['kind'][] {
   return (profile.allowedReactions ?? ['dodge', 'parry', 'block']).filter(x => x !== 'parry' || !profile.ranged);
 }
+export function reactionOptions(state: BattleState, target: UnitState, profile: { ranged?: boolean; allowedReactions?: ReactionResult['kind'][] }): { kind: ReactionResult['kind']; chance: number; ap: number }[] {
+  const cfg = state.config;
+  if (!cfg.reactionsEnabled || target.dazed) return [];
+  const mult = isFlanked(state, target) ? cfg.flankReactionMult : 1;
+  const allowed = allowedReactions(profile);
+  return (['dodge', 'parry', 'block'] as const)
+    .filter(kind => allowed.includes(kind) && (kind !== 'dodge' || !target.immobile))
+    .map(kind => ({ kind, chance: target[kind] * mult, ap: cfg[`${kind}Ap`] }))
+    .filter(o => o.chance > 0).sort((a, b) => b.chance - a.chance);
+}
 export function resolveSkill(state: BattleState, u: UnitState, skill: SkillDef) {
   const cfg = state.config;
   const base = attackMode(state, u, skill.modeId) ?? u.attack;
@@ -62,7 +72,7 @@ export function resolveSkill(state: BattleState, u: UnitState, skill: SkillDef) 
     pctPen: skill.special === 'sweep' ? cfg.sweepArmorPen : Math.min(1, (raw === undefined ? base.pctPen : 0) + (skill.pctPenBonus ?? 0)),
     flatPen: raw === undefined ? base.flatPen : 0,
     ranged: skill.kind === 'shot',
-    allowedReactions: delayed ? [] : allowedReactions({ ranged: skill.kind === 'shot', ...(skill.allowedReactions && { allowedReactions: skill.allowedReactions }) }),
+    allowedReactions: delayed ? [...(skill.allowedReactions ?? [])] : allowedReactions({ ranged: skill.kind === 'shot', ...(skill.allowedReactions && { allowedReactions: skill.allowedReactions }) }),
   };
   return { profile, delay: skill.special === 'sweep' ? cfg.sweepDelay : skill.special === 'rockfall' ? cfg.rockfallDelay : (skill.delay ?? 100) };
 }

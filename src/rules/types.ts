@@ -71,6 +71,8 @@ export interface WeaponDef {
 }
 
 export interface ArmorDef {
+  provenance: Provenance;
+  fieldProvenance: Record<string, FieldProvenance>;
   id: ArmorClass;
   name: string;
   armor: number;
@@ -120,6 +122,8 @@ export interface SkillDef {
 export type AiKind = 'swarm' | 'charger' | 'guardian' | 'caster' | 'nephilim';
 
 export interface UnitTemplate {
+  provenance: Provenance;
+  fieldProvenance: Record<string, FieldProvenance>;
   id: string;
   name: string;
   glyph: string;
@@ -186,6 +190,9 @@ export interface UnitState {
 }
 
 export interface DelayedEffect {
+  /** Explicit policy captured at cast time; absent legacy effects mean none. */
+  allowedReactions?: ReactionResult['kind'][];
+  origin?: Vec;
   id: string;
   name: string;
   sourceId: string;
@@ -345,7 +352,7 @@ export type GameEvent =
   | { t: 'status'; unitId: string; status: 'dazed' | 'feared' | 'recovered'; pushback?: number }
   | { t: 'displace'; unitId: string; from: Vec; to: Vec; reason: 'push' | 'pull' | 'dodge' }
   | { t: 'effectCast'; effect: DelayedEffect }
-  | { t: 'effectResolve'; effectId: string; name: string; tiles: Vec[]; hits: { unitId: string; damage: number; hpAfter: number }[] }
+  | { t: 'effectResolve'; effectId: string; name: string; tiles: Vec[]; hits: { unitId: string; damage: number; hpAfter: number; reactions?: ReactionResult[]; avoided?: ReactionResult['kind'] | null; displacedTo?: Vec }[] }
   | { t: 'turnEnd'; unitId: string; spent: number; delay: number; nextTurnAt: number }
   | { t: 'outcome'; outcome: Outcome }
   | { t: 'info'; text: string };

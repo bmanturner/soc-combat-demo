@@ -13,7 +13,7 @@ export function companionHp(templateId: string, level: number): number | null {
   return null;
 }
 
-export const UNITS: Record<string, UnitTemplate> = {
+const UNIT_SEEDS: Record<string, Omit<UnitTemplate, 'provenance' | 'fieldProvenance'>> = {
   jubal: { id: 'jubal', name: 'Jubal', glyph: 'J', side: 'player', role: 'Musician of the Cainites', hp: 120, armorClass: 'clothing', weapon: 'daggers', initiative: 0 },
   jabal: { id: 'jabal', name: 'Jabal', glyph: 'Jb', side: 'player', role: 'Shepherd, standard fighter', hp: 174, armorClass: 'light', weapon: 'shepherds_club', skills: ['heavy_daze'], initiative: 10 },
   hired_archer: { id: 'hired_archer', name: 'Hired Archer', glyph: 'A', side: 'player', role: 'Mercenary from the valley village', hp: 190, armorClass: 'light', weapon: 'hunting_bow', skills: ['aimed_shot'], initiative: 20 },
@@ -28,3 +28,22 @@ export const UNITS: Record<string, UnitTemplate> = {
     immobile: true, massive: true, initiative: 40,
   },
 };
+
+/** Concepts are Aaron's; these encounter labels and exact stat/AI realizations are not canon. */
+export const UNITS: Record<string, UnitTemplate> = Object.fromEntries(Object.values(UNIT_SEEDS).map(u => {
+  const why = u.id === 'small_rat' ? 'Aaron’s Granary rat encounter concept; “Granary Rat” label and all combat stats are demo.'
+    : u.id === 'jubal' ? 'Aaron’s Jubal character concept. HP and damage growth use Drafts/09 tentative math; initiative and exact demo kit are sandbox choices.'
+    : u.id === 'jabal' ? 'Aaron’s Jabal/shepherd companion and club concept. HP curve 150 + 12 × level and exact combat stats are demo.'
+    : u.id === 'hired_archer' ? 'Aaron’s hired archer companion concept. HP curve 140 + 10 × level and exact combat stats are demo.'
+    : u.id === 'wolf' ? 'Aaron’s wolves/pack encounter concept. Exact HP, movement speed, defenses and AI implementation are demo.'
+    : u.id === 'nephilim' ? 'Aaron’s trapped Nephilim encounter concept. Exact HP, footprint, defenses and initiative are demo.'
+    : 'Aaron’s cultist fighter/caster encounter concepts. “Cultist Zealot” / “Cultist Seer” labels, exact stats and AI implementation are demo.';
+  const fields: UnitTemplate['fieldProvenance'] = Object.fromEntries(Object.keys(u).map(k => [k, { owner: 'demo', status: 'demo', why: 'Exact template value/label is a demo implementation choice.' }]));
+  if (u.id === 'jubal' || u.id === 'jabal') fields.name = { owner: 'Aaron', status: 'source', why: 'Aaron’s named character.' };
+  fields.hp = u.id === 'jubal' ? { owner: 'Drafts/09', status: 'tentative', why: 'JUBAL_HP tentative growth table; not final Aaron numbers.' } : { owner: 'demo', status: 'demo', why };
+  if (u.side === 'player') {
+    fields.hpGrowth = fields.hp!;
+    fields.damageGrowth = { owner: 'Drafts/09', status: 'tentative', why: 'DAMAGE_SCALE tentative level curve; final weapon damage additionally includes demo balance tuning.' };
+  }
+  return [u.id, { ...u, provenance: { concept: 'source', numbers: u.id === 'jubal' ? 'tentative' : 'demo', why }, fieldProvenance: fields }];
+}));

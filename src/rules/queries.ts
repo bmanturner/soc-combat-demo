@@ -1,11 +1,12 @@
 // UI/AI queries: reachable tiles with engagement risk, attack previews, timeline projections.
 
+import { formatAp } from './describe';
 import { attackMode, attackModes, combatActionReason, equippedItem, equippedWeapon, reloadReason, reloadSlot, skillUseReason, swapReason } from './equipment';
 import { SKILLS, WEAPONS } from '../content/gear';
 export { availableWeapons, availableSkills, attackModes, equippedWeapon, equippedItem, effectiveStats, weaponLockReason, normalizeSetup } from './equipment';
 export { dualWieldCandidates, colossalRingTiles } from './targeting';
 import { keepEngagedChance, totalAvoidance } from './formulas';
-import { actionApCost, allowedReactions, delayedDamage, effectCanHit, hypotheticalBoard, resolvedDamage, resolveSkill, schedulerCompare, turnDelay, unitActsBefore, unitSchedule } from './resolvers';
+import { actionApCost, reactionOptions, delayedDamage, effectCanHit, hypotheticalBoard, resolvedDamage, resolveSkill, schedulerCompare, turnDelay, unitActsBefore, unitSchedule } from './resolvers';
 import { DIRS8, add, eq, key, type Vec } from './geometry';
 import { patternDirections } from './patterns';
 import { basicAttackHits, ringPenalty, skillTargeting, sweepTiles } from './targeting';
@@ -55,7 +56,7 @@ export function reachable(state: BattleState, unitId: string, opts: { budget?: n
   const budget = (opts.budget ?? movementLeft(state, u)) + 1e-6;
   const rolled = state.active?.unitId === u.id ? state.active.rolledAgainst : [];
   const dirs = state.config.diagonalMovement ? DIRS8 : DIRS8.filter((_, i) => i % 2 === 0);
-  const engagers = state.units.filter((e) => canEngageUnit(state, e, u));
+
   type Node = { p: Vec; cost: number; risk: number; path: Vec[]; risks: StepRisk[]; rolled: string[] };
   const best = new Map<string, { cost: number; risk: number }>();
   const pass = new Map<string, Node>();
@@ -66,6 +67,10 @@ export function reachable(state: BattleState, unitId: string, opts: { budget?: n
     const cur = frontier.shift()!;
     const k = key(cur.p);
     if (!pass.has(k)) pass.set(k, cur);
+    // Engagement can return when this mover breaks a flank, including during ally transit.
+    const board = hypotheticalBoard(state, u, cur.p);
+    const mover = unitById(board, u.id);
+    const engagers = board.units.filter(e => e.side !== mover.side && distToUnit(cur.p, e) <= 1 && canEngageUnit(board, e, mover));
     for (const d of dirs) {
       const np = add(cur.p, d);
       if (!walkable(state, np)) continue;
@@ -123,15 +128,7 @@ export function expectedStrike(state: BattleState, attacker: UnitState, target: 
   const cfg = state.config;
   const hitChance = Math.min(0.95, Math.max(0.05, opts.hit));
   const flanked = isFlanked(state, target);
-  const mult = flanked ? cfg.flankReactionMult : 1;
-  const reactions: number[] = [];
-  if (cfg.reactionsEnabled && !target.dazed && !opts.noReactions) {
-    const allowed = allowedReactions(opts);
-    if (!target.immobile && allowed.includes('dodge')) reactions.push(target.dodge * mult);
-    if (allowed.includes('parry')) reactions.push(target.parry * mult);
-    if (allowed.includes('block')) reactions.push(target.block * mult);
-  }
-  const avoidChance = totalAvoidance(reactions);
+  const avoidChance = opts.noReactions ? 0 : totalAvoidance(reactionOptions(state, target, opts).map(o => o.chance));
   const landChance = hitChance * (1 - avoidChance);
   const damageIfLands = resolvedDamage(state, target, opts.damage, opts.damageType, opts.pctPen, opts.flatPen);
   const criticalDamage = resolvedDamage(state, target, opts.damage * cfg.critMult, opts.damageType, opts.pctPen, opts.flatPen);
@@ -235,9 +232,10 @@ export function previewSkill(state: BattleState, u: UnitState, skillId: string, 
       kind: 'skill', anchor, tiles: tg.area!, area: tg.area!, apCost: cost,
       targets: victims.map((x) => {
         const damage = delayedDamage(state, profile, x);
-        return { unitId: x.id, name: x.name, hitChance: 1, avoidChance: 0, landChance: 1, expectedDamage: damage, damageIfLands: damage, kills: damage >= x.hp, flanked: isFlanked(state, x) };
+        const avoidChance = totalAvoidance(reactionOptions(state, x, profile).map(o => o.chance));
+        return { unitId: x.id, name: x.name, hitChance: 1, avoidChance, landChance: 1 - avoidChance, expectedDamage: damage * (1 - avoidChance), damageIfLands: damage, kills: damage >= x.hp, flanked: isFlanked(state, x) };
       }),
-      note: `Erupts in ${delay} AP`,
+      note: `Erupts in ${formatAp(delay)} AP · Reactions at impact: ${profile.allowedReactions?.join(', ') || 'none'} (current-board estimate)`,
     };
   }
   const t = tg.target!;

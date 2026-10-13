@@ -1,11 +1,12 @@
 // The combat engine: build a battle, apply actions, run the AP timeline. Deterministic given seed + actions.
 
+import { formatAp } from './describe';
 import { attackMode, availableSkills, combatActionReason, enemyTuning, equippedItem, refreshEquipment, reloadReason, reloadSlot, skillUseReason, swapReason, validateSetup, weaponInstance } from './equipment';
 import { ARMOR, SKILLS, WEAPONS } from '../content/gear';
 import { DAMAGE_SCALE, UNITS, companionHp } from '../content/units';
 import type { RulesConfig } from './config';
 import { keepEngagedChance } from './formulas';
-import { actionApCost, allowedReactions, delayedDamage, effectCanHit, resolvedDamage, resolveSkill, schedulerCompare, turnDelay } from './resolvers';
+import { actionApCost, reactionOptions, delayedDamage, effectCanHit, resolvedDamage, resolveSkill, schedulerCompare, turnDelay } from './resolvers';
 import { add, cheb, eq, key, line, sign, type Vec } from './geometry';
 import { basicAttackHits, dualWieldCandidates, ringPenalty, skillTargeting } from './targeting';
 import { createRng, pick, roll } from './rng';
@@ -377,7 +378,7 @@ function doMove(state: BattleState, unit: UnitState, to: Vec, events: GameEvent[
       a.actionSpent += state.config.bowMoveSurcharge;
       a.surchargePaid = true;
       a.surchargePending = false;
-      events.push({ t: 'info', text: `${unit.name} moved after a stationary shot: +${state.config.bowMoveSurcharge} AP.` });
+      events.push({ t: 'info', text: `${unit.name} moved after a stationary shot: +${formatAp(state.config.bowMoveSurcharge)} AP.` });
     }
   }
 }
@@ -395,6 +396,27 @@ export interface StrikeOpts {
   noReactions?: boolean;
 }
 
+function resolveReactions(state: BattleState, origin: Vec, target: UnitState, profile: { ranged?: boolean; allowedReactions?: ReactionResult['kind'][] }) {
+  const result: { reactions: ReactionResult[]; avoided: ReactionResult['kind'] | null; displacedTo?: Vec } = { reactions: [], avoided: null };
+  for (const o of reactionOptions(state, target, profile)) {
+    const rr = roll(state.rng, o.chance);
+    result.reactions.push({ kind: o.kind, chance: o.chance, roll: rr.roll, success: rr.success });
+    if (!rr.success) continue;
+    result.avoided = o.kind;
+    pushBack(state, target, o.ap);
+    if (o.kind === 'dodge' && state.config.dodgeDisplaces) {
+      const away = { x: sign(target.pos.x - origin.x), y: sign(target.pos.y - origin.y) };
+      const dest = add(target.pos, away);
+      if ((away.x || away.y) && walkable(state, dest) && !occupant(state, dest)) {
+        result.displacedTo = dest;
+        target.pos = dest;
+      }
+    }
+    break;
+  }
+  return result;
+}
+
 /** Resolve one attack against one target: hit → reactions → penetration → damage → status. */
 export function strike(state: BattleState, attacker: UnitState, target: UnitState, profile: AttackProfile, penalty: number, events: GameEvent[], opts: StrikeOpts = {}): GameEvent & { t: 'strike' } {
   const cfg = state.config;
@@ -408,33 +430,7 @@ export function strike(state: BattleState, attacker: UnitState, target: UnitStat
     return ev;
   }
   const flanked = isFlanked(state, target);
-  if (cfg.reactionsEnabled && !target.dazed && !opts.noReactions) {
-    const mult = flanked ? cfg.flankReactionMult : 1;
-    const options: { kind: ReactionResult['kind']; chance: number; ap: number }[] = [];
-    const allowed = allowedReactions(profile);
-    if (!target.immobile && allowed.includes('dodge')) options.push({ kind: 'dodge', chance: target.dodge * mult, ap: cfg.dodgeAp });
-    if (allowed.includes('parry')) options.push({ kind: 'parry', chance: target.parry * mult, ap: cfg.parryAp });
-    if (allowed.includes('block')) options.push({ kind: 'block', chance: target.block * mult, ap: cfg.blockAp });
-    options.sort((x, y) => y.chance - x.chance);
-    for (const o of options) {
-      if (o.chance <= 0) continue;
-      const rr = roll(state.rng, o.chance);
-      ev.reactions.push({ kind: o.kind, chance: o.chance, roll: rr.roll, success: rr.success });
-      if (rr.success) {
-        ev.avoided = o.kind;
-        pushBack(state, target, o.ap);
-        if (o.kind === 'dodge' && cfg.dodgeDisplaces) {
-          const away = { x: sign(target.pos.x - attacker.pos.x), y: sign(target.pos.y - attacker.pos.y) };
-          const dest = add(target.pos, away);
-          if ((away.x || away.y) && walkable(state, dest) && !occupant(state, dest)) {
-            ev.displacedTo = dest;
-            target.pos = dest;
-          }
-        }
-        break;
-      }
-    }
-  }
+  if (!opts.noReactions) Object.assign(ev, resolveReactions(state, attacker.pos, target, profile));
   if (ev.avoided) {
     events.push(ev);
     return ev;
@@ -615,7 +611,7 @@ function doSkill(state: BattleState, unit: UnitState, skillId: string, target: V
     case 'sigil':
     case 'sweep': {
       if (skill.special === 'rockfall') for (const u of state.units) if (tg.area!.some((t) => eq(t, u.pos))) state.memory[`hidden:${u.id}`] = 0;
-      castEffect(state, unit, { name: skill.name, tiles: tg.area!, delay, damage: profile.damage, damageType: profile.damageType, pctPen: profile.pctPen, ...(skill.applies && { applies: skill.applies }) }, events);
+      castEffect(state, unit, { name: skill.name, tiles: tg.area!, delay, damage: profile.damage, damageType: profile.damageType, pctPen: profile.pctPen, allowedReactions: profile.allowedReactions ?? [], ...(skill.applies && { applies: skill.applies }) }, events);
       break;
     }
   }
@@ -626,7 +622,7 @@ function doSkill(state: BattleState, unit: UnitState, skillId: string, target: V
 export function castEffect(
   state: BattleState,
   source: UnitState,
-  spec: { name: string; tiles: Vec[]; delay: number; damage: number; damageType: 'physical' | 'magic'; pctPen: number; applies?: 'dazed' },
+  spec: { name: string; tiles: Vec[]; delay: number; damage: number; damageType: 'physical' | 'magic'; pctPen: number; applies?: 'dazed'; allowedReactions?: ReactionResult['kind'][] },
   events: GameEvent[],
 ): DelayedEffect {
   state.seq += 1;
@@ -635,6 +631,8 @@ export function castEffect(
     id: `fx${state.seq}`,
     name: spec.name,
     sourceId: source.id,
+    origin: { ...source.pos },
+    allowedReactions: [...(spec.allowedReactions ?? [])],
     tiles: spec.tiles.map((t) => ({ ...t })),
     castAt: state.clock,
     resolveAt: round3(state.clock + spec.delay),
@@ -651,15 +649,18 @@ export function castEffect(
 
 function resolveEffect(state: BattleState, eff: DelayedEffect, events: GameEvent[]): void {
   const source = state.units.find((u) => u.id === eff.sourceId) ?? null;
-  const hits: { unitId: string; damage: number; hpAfter: number }[] = [];
+  const hits: Extract<GameEvent, { t: 'effectResolve' }>['hits'] = [];
   const victims = state.units.filter((u) => alive(u) && tilesOf(u).some((t) => eff.tiles.some((x) => eq(x, t))));
   for (const u of victims) {
     if (!effectCanHit(state, eff, u)) continue;
-    const amount = delayedDamage(state, eff, u);
-    dealDamage(state, source, u, amount, events);
-    hits.push({ unitId: u.id, damage: amount, hpAfter: u.hp });
+    const from = { ...u.pos };
+    const reaction = resolveReactions(state, eff.origin ?? source?.pos ?? u.pos, u, { allowedReactions: eff.allowedReactions ?? [] });
+    if (reaction.displacedTo) events.push({ t: 'displace', unitId: u.id, from, to: reaction.displacedTo, reason: 'dodge' });
+    const amount = reaction.avoided ? 0 : delayedDamage(state, eff, u);
+    if (!reaction.avoided) dealDamage(state, source, u, amount, events);
+    hits.push({ unitId: u.id, damage: amount, hpAfter: u.hp, ...reaction });
     const tel = state.telemetry[u.id];
-    if (tel) tel.caught += 1;
+    if (tel && !reaction.avoided) tel.caught += 1;
   }
   for (const id of eff.threatenedAtCast) {
     if (!hits.some((h) => h.unitId === id)) {
@@ -674,7 +675,7 @@ function resolveEffect(state: BattleState, eff: DelayedEffect, events: GameEvent
     if (u.ko) {
       events.push({ t: 'ko', unitId: u.id });
       onKo(state, u, events);
-    } else if (eff.applies === 'dazed') applyDazed(state, u, events);
+    } else if (!h.avoided && eff.applies === 'dazed') applyDazed(state, u, events);
   }
 }
 

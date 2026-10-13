@@ -89,7 +89,7 @@ describe('engine and preview parity', () => {
     const s = bossTurn({ sweepDelay: 150 });
     const p = previewSkill(s, unitById(s, 'nephilim'), 'nephilim_sweep', { x: 2, y: 3 })!;
     const cast = applyAction(s, { type: 'skill', unitId: 'nephilim', skillId: 'nephilim_sweep', target: { x: 2, y: 3 } }).state;
-    expect(p.note).toBe(`Erupts in ${cast.effects[0]!.resolveAt - cast.clock} AP`);
+    expect(p.note).toBe(`Erupts in ${cast.effects[0]!.resolveAt - cast.clock} AP · Reactions at impact: none (current-board estimate)`);
   });
   it('R-07: timeline display ties must match the scheduler settings', () => {
     const s = duel();
