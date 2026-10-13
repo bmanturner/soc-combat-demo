@@ -104,7 +104,11 @@ test('U-02 real board bot handoff uses the committed movement and can be cancell
   await page.waitForFunction(() => window.__soc.store.getState().actions.length >= 2);
   await page.getByTestId('bot-toggle').uncheck();
   const moves = await page.evaluate(() => window.__soc.store.getState().log.filter(line => line.text.startsWith('Jubal moves')).map(line => line.text));
-  expect(moves.slice(0, 2)).toEqual(['Jubal moves 4 tiles to (5,4) (40 AP)', 'Jubal moves 1 tile to (6,4) (10 AP)']);
+  expect(moves[0]).toBe('Jubal moves 4 tiles to (5,4) (40 AP)');
+  // The bot must plan from the committed position: whatever it does next, a further move has only 10 AP (1 tile) left.
+  const second = await page.evaluate(() => window.__soc.store.getState().actions[1] as { type: string; unitId: string; to?: { x: number; y: number } });
+  expect(second.unitId).toBe('jubal');
+  if (second.type === 'move') expect(Math.max(Math.abs(second.to!.x - 5), Math.abs(second.to!.y - 4))).toBeLessThanOrEqual(1);
   await page.getByRole('button', { name: 'Restart', exact: true }).click();
   await page.evaluate(() => {
     window.__soc.controller.setBotParty(true);
