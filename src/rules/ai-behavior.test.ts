@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { botAction, enemyAction, plannedActionAp, pathFailureCost } from './ai';
+import { botAction, enemyAction, plannedActionAp, pathFailureCost, partyFocus } from './ai';
 import { applyAction } from './engine';
 import { previewAttack, previewSkill } from './queries';
 import { unitById } from './state';
@@ -11,6 +11,21 @@ function activate(s: BattleState, id: string) {
 }
 
 describe('AI intent regressions', () => {
+  it('expert melee focus does not route through a healthy screen for a lower-HP backline', () => {
+    const s = testBattle({ rows: OPEN_7x7, jubal: { x: 3, y: 5 }, weapon: 'daggers', enemies: [
+      { template: 'cultist_fighter', id: 'guard', at: { x: 3, y: 3 } },
+      { template: 'cultist_mage', id: 'seer', at: { x: 3, y: 0 } },
+    ] });
+    const u = unitById(s, 'jubal');
+    expect(partyFocus(s, u, 'expert')?.id).toBe('guard');
+    unitById(s, 'seer').pos = { x: 4, y: 3 };
+    expect(partyFocus(s, u, 'expert')?.id).toBe('seer');
+    unitById(s, 'seer').pos = { x: 3, y: 0 };
+    u.attack.ranged = true;
+    expect(partyFocus(s, u, 'expert')?.id).toBe('seer');
+    expect(partyFocus(s, u, 'novice')?.id).toBe('guard');
+  });
+
   it('A-02 Seer prices allied KO risk but still permits a self-sigil lure', () => {
     const s = testBattle({ rows: OPEN_7x7, jubal: { x: 2, y: 3 }, allies: [{ template: 'jabal', id: 'jabal', at: { x: 4, y: 3 } }], enemies: [{ template: 'cultist_mage', id: 'seer', at: { x: 3, y: 3 } }] });
     activate(s, 'seer');

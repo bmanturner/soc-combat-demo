@@ -436,13 +436,24 @@ function equipmentAction(state: BattleState, u: UnitState, focus: UnitState | nu
 /** A reasonably competent player: hit, then get out of anything that would land before its next turn. */
 export type PartyPolicy = 'expert' | 'novice';
 
+export function partyFocus(state: BattleState, u: UnitState, policy: PartyPolicy): UnitState | null {
+  const foes = state.units.filter(x => alive(x) && x.side !== u.side);
+  const nearest = nearestEnemy(state, u);
+  if (!nearest || policy === 'novice') return nearest;
+  // Melee focus is local: a low-HP backliner is not automatically worth crossing its screen.
+  // Keep low-HP kill priority within one tile of the nearest foe; ranged can still reach the backline.
+  // This changes intent, not legal attacks: option utility can still choose a valuable distant shot.
+  const local = u.attack.ranged ? foes : foes.filter(f => distToUnit(u.pos, f) <= distToUnit(u.pos, nearest) + 1);
+  return local.reduce((b, f) => f.hp < b.hp ? f : b);
+}
+
 export function botAction(state: BattleState, policy: PartyPolicy = 'expert'): Action {
   const a = state.active;
   if (!a) throw new Error('no active unit');
   const u = unitById(state, a.unitId);
   const foes = state.units.filter((x) => alive(x) && x.side !== u.side);
   if (foes.length === 0) return END(u);
-  const focus = policy === 'novice' ? nearestEnemy(state, u)! : foes.reduce((b, f) => (f.hp < b.hp ? f : b));
+  const focus = partyFocus(state, u, policy)!;
   const dangerCache = new Map<string, number>();
   const danger = (p: Vec, delay: number) => {
     const k = `${key(p)}:${delay}`;
