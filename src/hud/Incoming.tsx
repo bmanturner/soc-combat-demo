@@ -4,12 +4,15 @@ import { eq } from '../rules/geometry';
 import { bossSweepThreat, escapeOutlook, projectedNextTurn } from '../rules/queries';
 import { effectCanHit, unitActsBefore } from '../rules/resolvers';
 import { alive, tilesOf } from '../rules/state';
+import { pendingFor } from '../game/preview';
 import { controller } from '../game/controller';
 import { useGame } from './hooks';
 
 /** What's about to land, who is inside, and whether they act before it does. */
 export function IncomingPanel() {
   const battle = useGame((s) => s.battle);
+  const hoverTile = useGame(s => s.hoverTile), mode = useGame(s => s.mode), busy = useGame(s => s.busy), actionHover = useGame(s => s.actionHover);
+  const pending = pendingFor({battle,hoverTile,mode,busy,actionHover});
   if (!battle) return null;
   const party = battle.units.filter((u) => u.side === 'player' && alive(u));
   const threat = bossSweepThreat(battle);
@@ -22,6 +25,7 @@ export function IncomingPanel() {
   return (
     <div className="incoming" data-testid="incoming">
       <div className="section-title">Incoming</div>
+      {pending && <div className="muted" data-testid="incoming-preview">Preview {pending.what}: next turn in {Math.round(pending.projected)} AP. {pending.dangerText}</div>}
       {items.length === 0 && !threat && <div className="muted">Nothing telegraphed.</div>}
       {items.map(({ e, impactIn, inside }) => (
         <div key={e.id} className="inc-item">

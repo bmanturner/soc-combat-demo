@@ -12,6 +12,8 @@ const shared = decodeShare(location.hash);
 if (shared.invalid) showToast('Invalid share-link values were replaced with defaults.');
 store.setState({
   config: shared.config,
+  secondaryWeaponId: shared.secondaryWeaponId ?? null,
+  equippedSlot: shared.equippedSlot ?? 0,
   ...(shared.weaponId && { weaponId: shared.weaponId }),
   ...(shared.armor && { armor: shared.armor }),
   ...(shared.seed !== undefined && { seed: shared.seed }),

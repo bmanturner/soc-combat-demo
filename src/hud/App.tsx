@@ -83,6 +83,9 @@ export function App() {
         void controller.endTurn();
       } else if (e.key === 'm' || e.key === 'M') controller.setMode({ kind: 'move' });
       else if (e.key === 'a' || e.key === 'A') controller.setMode({ kind: 'attack' });
+      else if (e.key.toLowerCase() === 'r') void controller.reload();
+      else if (e.key.toLowerCase() === 'w') void controller.swapWeapon();
+      else if (e.key.toLowerCase() === 't') { e.preventDefault(); controller.cycleMode(); }
       else if (/^[1-9]$/.test(e.key)) {
         const skill = u.skills[Number(e.key) - 1];
         if (skill) controller.setMode({ kind: 'skill', skillId: skill.id });

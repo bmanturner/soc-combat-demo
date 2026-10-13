@@ -1,6 +1,6 @@
 // Orchestrates battles: player input → rules → board animation → AI turns. The only place that mutates `store`.
 
-import { availableWeapons } from '../rules/equipment';
+import { attackModes, availableWeapons } from '../rules/equipment';
 import { encounterById } from '../content/encounters';
 import { botAction, enemyAction } from '../rules/ai';
 import { DEFAULT_CONFIG, type RulesConfig } from '../rules/config';
@@ -84,7 +84,7 @@ function appendLog(state: BattleState, events: GameEvent[]): void {
 
 function syncHash(): void {
   const s = store.getState();
-  const url = shareUrl({ encounterId: s.encounterId, weaponId: s.weaponId, armor: s.armor, seed: s.seed, config: s.config });
+  const url = shareUrl({ encounterId: s.encounterId, weaponId: s.weaponId, secondaryWeaponId: s.secondaryWeaponId, equippedSlot: s.equippedSlot, armor: s.armor, seed: s.seed, config: s.config });
   history.replaceState(null, '', url);
 }
 
@@ -189,10 +189,11 @@ export const controller = {
     const armor = enc.allowedArmor.includes(s.armor) ? s.armor : enc.defaultArmor;
     cancelBattle();
     const weaponId = availableWeapons(enc, s.config).some(w => w.id === s.weaponId) ? s.weaponId : 'daggers';
-    store.setState({ screen: 'setup', battle: null, busy: false, encounterId, armor, weaponId });
+    const secondaryWeaponId = encounterId !== 'granary' && availableWeapons(enc, s.config).some(w => w.id === s.secondaryWeaponId) ? s.secondaryWeaponId : null;
+    store.setState({ screen: 'setup', battle: null, busy: false, encounterId, armor, weaponId, secondaryWeaponId, equippedSlot: secondaryWeaponId ? s.equippedSlot : 0 });
   },
 
-  setLoadout(patch: Partial<{ weaponId: string; armor: 'clothing' | 'light' | 'medium' | 'heavy' }>): void {
+  setLoadout(patch: Partial<{ weaponId: string; secondaryWeaponId: string | null; equippedSlot: 0 | 1; armor: 'clothing' | 'light' | 'medium' | 'heavy' }>): void {
     store.setState(patch);
   },
 
@@ -203,7 +204,10 @@ export const controller = {
     const seed = opts.newSeed ? Math.floor(Math.random() * 2 ** 31) : s.seed;
     const armor = enc.allowedArmor.includes(s.armor) ? s.armor : enc.defaultArmor;
     const weaponId = availableWeapons(enc, s.config).some(w => w.id === s.weaponId) ? s.weaponId : 'daggers';
-    const { state, events } = createBattle(enc, { weaponIds: [weaponId, null], armor }, s.config, seed);
+    const secondaryWeaponId = enc.id !== 'granary' && availableWeapons(enc, s.config).some(w => w.id === s.secondaryWeaponId) ? s.secondaryWeaponId : null;
+    const equippedSlot = secondaryWeaponId ? s.equippedSlot : 0;
+    store.setState({ secondaryWeaponId, equippedSlot, actionHover: null });
+    const { state, events } = createBattle(enc, { weaponIds: [weaponId, secondaryWeaponId], equippedSlot, armor }, s.config, seed);
     logSeq = 0;
     store.setState({ screen: 'battle', weaponId, battle: state, battleGeneration: s.battleGeneration + 1, seed, armor, actions: [], log: [], busy: false, mode: defaultMode(state), boardVersion: s.boardVersion + 1, hoverTile: null, hoverUnitId: null });
     appendLog(state, [{ t: 'info', text: `${enc.name}: ${enc.story}` }, ...events]);
@@ -216,7 +220,28 @@ export const controller = {
   },
 
   setMode(mode: Mode): void {
-    store.setState({ mode });
+    store.setState({ mode, actionHover: null });
+  },
+
+  cycleMode(): void {
+    const s = store.getState(), u = activePlayer(s.battle);
+    if (!s.battle || !u) return;
+    const modes = attackModes(s.battle, u);
+    const current = s.mode.kind === 'attack' ? s.mode.modeId : undefined;
+  const index = current === undefined ? 0 : modes.findIndex(m => m.id === current);
+    controller.setMode({ kind: 'attack', modeId: modes[(index + 1) % modes.length]!.id });
+  },
+
+  async reload(): Promise<void> {
+    const s = store.getState(), u = activePlayer(s.battle);
+    if (!u || s.busy || s.botParty) return;
+    if (await apply({ type: 'reload', unitId: u.id })) await runLoop();
+  },
+
+  async swapWeapon(): Promise<void> {
+    const s = store.getState(), u = activePlayer(s.battle);
+    if (!u || s.busy || s.botParty) return;
+    if (await apply({ type: 'swapWeapon', unitId: u.id, slot: u.equippedSlot === 0 ? 1 : 0 })) await runLoop();
   },
 
   setSpeed(speed: number): void {
@@ -274,8 +299,8 @@ export const controller = {
     }
     if (s.mode.kind === 'attack') {
       if (a.acted) return showToast('Already acted this turn.');
-      if (!previewAttack(state, u, tile)) return showToast(u.attack.pattern === 'ranged' ? 'No target in range and sight there.' : 'Aim at an adjacent tile with an enemy in the pattern.');
-      await apply({ type: 'attack', unitId: u.id, target: tile });
+      if (!previewAttack(state, u, tile, u.pos, s.mode.modeId)) return showToast('No target in this mode’s range and pattern.');
+      await apply({ type: 'attack', unitId: u.id, target: tile, modeId: s.mode.modeId });
       await runLoop();
       return;
     }
@@ -297,6 +322,6 @@ export const controller = {
 
   shareLink(config?: RulesConfig): string {
     const s = store.getState();
-    return shareUrl({ encounterId: s.encounterId, weaponId: s.weaponId, armor: s.armor, seed: s.seed, config: config ?? s.config });
+    return shareUrl({ encounterId: s.encounterId, weaponId: s.weaponId, secondaryWeaponId: s.secondaryWeaponId, equippedSlot: s.equippedSlot, armor: s.armor, seed: s.seed, config: config ?? s.config });
   },
 };

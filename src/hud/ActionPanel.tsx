@@ -1,5 +1,7 @@
 import { ARMOR, SKILLS, WEAPONS } from '../content/gear';
-import { basicAttackApCost, movementLeft, skillCost } from '../rules/queries';
+import { basicAttackApCost, movementLeft, previewAttack } from '../rules/queries';
+import { combatActionReason, attackModes } from '../rules/equipment';
+import { WeaponControls } from './WeaponControls';
 import { unitById } from '../rules/state';
 import type { BattleState, UnitState } from '../rules/types';
 import { controller } from '../game/controller';
@@ -73,12 +75,16 @@ export function ActionPanel() {
   const busy = useGame((s) => s.busy);
   const bot = useGame((s) => s.botParty);
   const hoverUnitId = useGame((s) => s.hoverUnitId);
+  const hoverTile = useGame(s => s.hoverTile);
   if (!battle) return null;
   const u = activePlayer(battle);
   const a = battle.active;
   const acting = a ? unitById(battle, a.unitId) : null;
   const hovered = hoverUnitId ? battle.units.find((x) => x.id === hoverUnitId) : null;
   const end = u ? endTurnPreview(battle) : null;
+  const attackMode = u ? attackModes(battle,u).find(m => m.id === (mode.kind === 'attack' ? mode.modeId : undefined)) ?? attackModes(battle,u)[0] : null;
+  const attackReason = u ? combatActionReason(battle,u,'attack',attackMode?.ammo === 'bolt') : null;
+  const preview = u && hoverTile && mode.kind === 'attack' ? previewAttack(battle,u,hoverTile,u.pos,mode.modeId) : null;
   const spent = a ? a.moveSpent + a.actionSpent + a.reactionSpent : 0;
 
   return (
@@ -88,36 +94,24 @@ export function ActionPanel() {
           <div className="turn-title">{u.name}'s turn</div>
           <div className="turn-ap">
             <span>Spent <b>{ap(spent)}</b> AP</span>
-            <span>Move left <b>{ap(movementLeft(battle, u))}</b> AP</span>
+            <span>Movement left <b>{ap(movementLeft(battle, u))}</b> AP</span>
           </div>
           <div className="btn-row">
             <button className={mode.kind === 'move' ? 'on' : ''} onClick={() => controller.setMode({ kind: 'move' })} disabled={busy || a.movementLocked} title="M">
               Move <kbd>M</kbd>
             </button>
-            <button className={mode.kind === 'attack' ? 'on' : ''} onClick={() => controller.setMode({ kind: 'attack' })} disabled={busy || a.acted} title="A">
-              Attack · {basicAttackApCost(battle, u)} <kbd>A</kbd>
+            <button className={mode.kind === 'attack' ? 'on' : ''} onClick={() => controller.setMode({ kind: 'attack' })} disabled={busy || !!attackReason} title={attackReason ?? 'A'}>
+              Attack · {basicAttackApCost(battle, u, mode.kind === 'attack' ? mode.modeId : undefined)} <kbd>A</kbd>
             </button>
           </div>
-          <div className="btn-row">
-            {u.skills.map((s, i) => {
-              const def = SKILLS[s.id];
-              if (!def) return null;
-              const ready = s.readyAt <= battle.clock;
-              const on = mode.kind === 'skill' && mode.skillId === s.id;
-              return (
-                <button key={s.id} className={on ? 'on' : ''} disabled={busy || a.acted || !ready} onClick={() => controller.setMode({ kind: 'skill', skillId: s.id })} title={`${def.description}${def.status === 'demo' ? ' [demo placeholder skill]' : ''}`}>
-                  {def.name} · {skillCost(battle, u, def)}
-                  {!ready && <small> ({Math.round(s.readyAt - battle.clock)})</small>} <kbd>{i + 1}</kbd>
-                </button>
-              );
-            })}
-          </div>
+          <WeaponControls battle={battle} unit={u} busy={busy} mode={mode} />
+          {preview && <div data-testid="attack-preview" className="hint">Selected attack: {preview.apCost} AP{preview.cycleAp !== preview.apCost && ` · ${preview.cycleAp} AP including reload`}<div>{preview.note}</div>{preview.candidates?.map(c => <div key={c.unitId}>{unitById(battle,c.unitId).name}: {pct(c.probability)} selection · one random</div>)}</div>}
           <button className={`end-turn ${end?.danger ?? ''}`} onClick={() => void controller.endTurn()} disabled={busy} data-testid="end-turn" title={end?.text || 'End your turn'}>
             {spent === 0 ? 'Wait' : 'End turn'} → next in {Math.round(end?.projected ?? 0)} AP <kbd>Space</kbd>
             {end?.danger === 'hit' && <div className="warn">⚠ No escape if you stop here</div>}
             {end?.danger === 'risk' && <div className="warn">⚠ Escape risk — inspect the timeline</div>}
           </button>
-          <div className="hint">{mode.kind === 'move' ? 'Click a blue tile to move, or an enemy to attack it. Right-click cancels.' : mode.kind === 'attack' ? 'Click a tile to aim. Patterns hit every enemy in them.' : 'Click a highlighted target.'}</div>
+          <div className="hint">{mode.kind === 'move' ? 'Click a blue tile to move, or an enemy to attack it. Right-click cancels.' : mode.kind === 'attack' ? (u.attack.pattern === 'dualArc' ? 'Solid = primary. Dashed = one random surviving enemy; the primary can be picked again.' : 'Click a tile to aim; T cycles attack modes. Sweep can target yourself.') : 'Click a highlighted target.'}</div>
         </div>
       ) : (
         <div className="turn-box waiting">{battle.outcome !== 'ongoing' ? 'Battle over' : acting ? `${acting.name} is acting…` : '…'}</div>

@@ -4,10 +4,13 @@ import { DEFAULT_CONFIG, SETTINGS, diffFromDefaults, withOverrides, type RulesCo
 import type { ArmorClass, BattleState } from '../rules/types';
 import { ENCOUNTERS } from '../content/encounters';
 import { WEAPONS } from '../content/gear';
+import { availableWeapons, normalizeSetup } from '../rules/equipment';
 
 export interface ShareState {
   encounterId?: string;
   weaponId?: string;
+  secondaryWeaponId?: string | null;
+  equippedSlot?: 0 | 1;
   armor?: ArmorClass;
   seed?: number;
   config: RulesConfig;
@@ -21,6 +24,8 @@ export function encodeShare(s: ShareState): string {
   const p = new URLSearchParams();
   if (s.encounterId) p.set('e', s.encounterId);
   if (s.weaponId) p.set('w', s.weaponId);
+  if (s.secondaryWeaponId) p.set('w2', s.secondaryWeaponId);
+  if (s.equippedSlot !== undefined) p.set('slot', String(s.equippedSlot));
   if (s.armor) p.set('a', s.armor);
   if (s.seed !== undefined) p.set('s', String(s.seed));
   const diff = diffFromDefaults(s.config);
@@ -73,12 +78,24 @@ export function decodeShare(hash: string): ShareState {
       out.invalid = true;
     }
   }
+  out.secondaryWeaponId = null;
+  out.equippedSlot = 0;
+  const allowed = availableWeapons(enc, out.config).map(w => w.id);
+  if (out.weaponId && !allowed.includes(out.weaponId)) { out.weaponId = 'daggers'; out.invalid = true; }
+  const reserve = p.get('w2');
+  if (reserve !== null) {
+    if (enc.id !== 'granary' && allowed.includes(reserve)) out.secondaryWeaponId = reserve;
+    else out.invalid = true;
+  }
+  const slot = p.get('slot');
+  if (slot === '1' && out.secondaryWeaponId) out.equippedSlot = 1;
+  else if (slot !== null && slot !== '0') out.invalid = true;
   return out;
 }
 
 export function battleShareUrl(b: BattleState): string {
-  const jubal = b.units.find(u => u.id === 'jubal');
-  return shareUrl({ encounterId: b.encounterId, weaponId: jubal?.weaponId ?? 'daggers', armor: jubal?.armorClass ?? 'clothing', seed: b.seed, config: b.config });
+  const setup = normalizeSetup(b.setup);
+  return shareUrl({ encounterId: b.encounterId, weaponId: setup.weaponIds[0], secondaryWeaponId: setup.weaponIds[1], equippedSlot: setup.equippedSlot, armor: setup.armor, seed: b.seed, config: b.config });
 }
 
 export function shareUrl(s: ShareState): string {
