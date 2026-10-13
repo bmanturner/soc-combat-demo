@@ -14,6 +14,8 @@ import { showToast, store, type LogLine, type Mode } from './store';
 
 export interface Animator {
   play(events: GameEvent[], before: BattleState, after: BattleState, speed: number): Promise<void>;
+  /** Stop visual work and settle all pending play promises. */
+  cancel?(): void;
 }
 
 let animator: Animator | null = null;
@@ -29,6 +31,19 @@ export function unregisterAnimator(a: Animator): void {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let logSeq = 0;
 let battleToken = 0;
+let releaseAnimation: (() => void) | null = null;
+let transaction: Promise<void> | null = null;
+let loopingToken: number | null = null;
+
+function cancelBattle(): void {
+  battleToken += 1;
+  animator?.cancel?.();
+  releaseAnimation?.();
+  releaseAnimation = null;
+  transaction = null;
+  // Old continuations are token-guarded; they cannot clear the new loop's lock.
+  loopingToken = null;
+}
 
 function toneOf(state: BattleState, e: GameEvent): LogLine['tone'] {
   const side = (id: string | undefined) => (id ? state.units.find((u) => u.id === id)?.side : undefined);
@@ -89,7 +104,7 @@ function defaultMode(state: BattleState): Mode {
 async function apply(action: Action): Promise<boolean> {
   const s = store.getState();
   const before = s.battle;
-  if (!before) return false;
+  if (!before || s.busy || before.active?.unitId !== action.unitId) return false;
   let result: { state: BattleState; events: GameEvent[] };
   try {
     result = applyAction(before, action);
@@ -102,26 +117,36 @@ async function apply(action: Action): Promise<boolean> {
   }
   const token = battleToken;
   store.setState({ busy: true, hoverTile: null });
-  if (animator) await animator.play(result.events, before, result.state, store.getState().speed);
+  let release!: () => void;
+  const cancelled = new Promise<void>(resolve => { release = resolve; });
+  releaseAnimation = release;
+  transaction = cancelled;
+  try {
+    if (animator) await Promise.race([animator.play(result.events, before, result.state, s.speed), cancelled]);
+  } catch {
+    // Animation is presentation only: commit the legal action and let refresh snap the board.
+    if (token === battleToken) showToast('Animation interrupted; battle state recovered.');
+  } finally {
+    release();
+    if (token === battleToken) { transaction = null; releaseAnimation = null; }
+  }
   if (token !== battleToken) return false; // battle was restarted mid-animation
   appendLog(result.state, result.events);
   store.setState((st) => ({ battle: result.state, actions: [...st.actions, action], busy: false, mode: defaultMode(result.state) }));
   return true;
 }
 
-let looping = false;
-async function kickAfterRestart(): Promise<void> {
-  // A previous loop may still be unwinding (it bails on the token change); wait for it, then run.
-  for (let i = 0; i < 100 && looping; i++) await sleep(20);
-  await runLoop();
-}
 async function runLoop(): Promise<void> {
-  if (looping) return;
-  looping = true;
+  const s = store.getState();
+  if (!s.battle?.active || s.battle.outcome !== 'ongoing') return;
+  if (activePlayer(s.battle) && !s.botParty) return;
+  const token = battleToken;
+  if (loopingToken === token) return;
+  loopingToken = token;
   try {
     await loopBody();
   } finally {
-    looping = false;
+    if (loopingToken === token) loopingToken = null;
   }
 }
 
@@ -129,17 +154,22 @@ async function loopBody(): Promise<void> {
   const token = battleToken;
   for (let guard = 0; guard < 2000; guard++) {
     if (token !== battleToken) return;
+    if (transaction) { await transaction; if (token !== battleToken) return; }
     const s = store.getState();
     const state = s.battle;
-    if (!state || state.outcome !== 'ongoing' || !state.active) return;
+    if (s.busy || !state || state.outcome !== 'ongoing' || !state.active) return;
     const u = unitById(state, state.active.unitId);
     if (u.side === 'player' && !s.botParty) return;
     await sleep((u.side === 'player' ? 220 : 280) / s.speed);
     if (token !== battleToken) return;
-    const fresh = store.getState().battle!;
+    const latest = store.getState();
+    const fresh = latest.battle;
+    if (latest.busy || fresh !== state || fresh.active?.unitId !== u.id) continue;
+    if (u.side === 'player' && !latest.botParty) return;
     let action: Action = u.side === 'player' ? botAction(fresh) : enemyAction(fresh);
     const ok = await apply(action);
-    if (!ok && token === battleToken) {
+    const current = store.getState();
+    if (!ok && token === battleToken && !current.busy && current.battle?.active?.unitId === u.id && (u.side !== 'player' || current.botParty)) {
       action = { type: 'endTurn', unitId: u.id };
       await apply(action);
     }
@@ -148,7 +178,7 @@ async function loopBody(): Promise<void> {
 
 export const controller = {
   openMenu(): void {
-    battleToken += 1;
+    cancelBattle();
     store.setState({ screen: 'menu', battle: null, busy: false, log: [], actions: [] });
   },
 
@@ -156,7 +186,8 @@ export const controller = {
     const enc = encounterById(encounterId);
     const s = store.getState();
     const armor = enc.allowedArmor.includes(s.armor) ? s.armor : enc.defaultArmor;
-    store.setState({ screen: 'setup', encounterId, armor });
+    cancelBattle();
+    store.setState({ screen: 'setup', battle: null, busy: false, encounterId, armor });
   },
 
   setLoadout(patch: Partial<{ weaponId: string; armor: 'clothing' | 'light' | 'medium' | 'heavy' }>): void {
@@ -164,17 +195,17 @@ export const controller = {
   },
 
   startBattle(opts: { newSeed?: boolean } = {}): void {
-    battleToken += 1;
+    cancelBattle();
     const s = store.getState();
     const enc = encounterById(s.encounterId);
     const seed = opts.newSeed ? Math.floor(Math.random() * 2 ** 31) : s.seed;
     const armor = enc.allowedArmor.includes(s.armor) ? s.armor : enc.defaultArmor;
     const { state, events } = createBattle(enc, { weaponId: s.weaponId, armor }, s.config, seed);
     logSeq = 0;
-    store.setState({ screen: 'battle', battle: state, seed, armor, actions: [], log: [], busy: false, mode: defaultMode(state), boardVersion: s.boardVersion + 1, hoverTile: null, hoverUnitId: null });
+    store.setState({ screen: 'battle', battle: state, battleGeneration: s.battleGeneration + 1, seed, armor, actions: [], log: [], busy: false, mode: defaultMode(state), boardVersion: s.boardVersion + 1, hoverTile: null, hoverUnitId: null });
     appendLog(state, [{ t: 'info', text: `${enc.name}: ${enc.story}` }, ...events]);
     syncHash();
-    void kickAfterRestart();
+    void runLoop();
   },
 
   restart(newSeed = false): void {
@@ -261,8 +292,8 @@ export const controller = {
     if (ok) await runLoop();
   },
 
-  shareLink(): string {
+  shareLink(config?: RulesConfig): string {
     const s = store.getState();
-    return shareUrl({ encounterId: s.encounterId, weaponId: s.weaponId, armor: s.armor, seed: s.seed, config: s.config });
+    return shareUrl({ encounterId: s.encounterId, weaponId: s.weaponId, armor: s.armor, seed: s.seed, config: config ?? s.config });
   },
 };

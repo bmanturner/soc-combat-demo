@@ -66,14 +66,16 @@ export function App() {
   const screen = useGame((s) => s.screen);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
       const s = store.getState();
+      // Dialogs own Escape and focus, including when a slider/select is focused.
+      if (s.settingsOpen || s.helpOpen || s.battle?.outcome !== 'ongoing') return;
       if (e.key === 'Escape') {
-        if (s.settingsOpen || s.helpOpen) store.setState({ settingsOpen: false, helpOpen: false });
-        else controller.setMode({ kind: 'move' });
+        controller.setMode({ kind: 'move' });
         return;
       }
-      if (s.screen !== 'battle') return;
+      if (e.target instanceof HTMLElement && (e.target.matches('input, select, textarea') || e.target.isContentEditable)) return;
+      if (e.key === ' ' && e.target instanceof HTMLButtonElement) return;
+      if (s.screen !== 'battle' || s.busy || s.botParty) return;
       const u = activePlayer(s.battle);
       if (!u) return;
       if (e.key === ' ') {

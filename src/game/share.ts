@@ -1,7 +1,9 @@
 // Share links: encounter, loadout, seed and only the settings that differ from defaults.
 
-import { DEFAULT_CONFIG, diffFromDefaults, withOverrides, type RulesConfig } from '../rules/config';
-import type { ArmorClass } from '../rules/types';
+import { DEFAULT_CONFIG, SETTINGS, diffFromDefaults, withOverrides, type RulesConfig } from '../rules/config';
+import type { ArmorClass, BattleState } from '../rules/types';
+import { ENCOUNTERS } from '../content/encounters';
+import { WEAPONS } from '../content/gear';
 
 export interface ShareState {
   encounterId?: string;
@@ -9,6 +11,7 @@ export interface ShareState {
   armor?: ArmorClass;
   seed?: number;
   config: RulesConfig;
+  invalid?: boolean;
 }
 
 const toB64Url = (s: string) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -26,26 +29,56 @@ export function encodeShare(s: ShareState): string {
 }
 
 export function decodeShare(hash: string): ShareState {
+  const out: ShareState = { config: { ...DEFAULT_CONFIG } };
+  // Bound work before URL decoding or base64 allocation.
+  if (hash.length > 16384) return { ...out, encounterId: 'granary', weaponId: 'daggers', armor: 'clothing', seed: 1, invalid: true };
   const p = new URLSearchParams(hash.replace(/^#/, ''));
-  let config: RulesConfig = { ...DEFAULT_CONFIG };
-  const c = p.get('c');
-  if (c) {
-    try {
-      config = withOverrides(JSON.parse(fromB64Url(c)));
-    } catch {
-      config = { ...DEFAULT_CONFIG };
-    }
+  const e = p.get('e');
+  if (e !== null) {
+    out.encounterId = ENCOUNTERS.some(enc => enc.id === e) ? e : 'granary';
+    if (out.encounterId !== e) out.invalid = true;
+  }
+  const w = p.get('w');
+  if (w !== null) {
+    out.weaponId = Object.hasOwn(WEAPONS, w) ? w : 'daggers';
+    if (out.weaponId !== w) out.invalid = true;
+  }
+  const enc = ENCOUNTERS.find(enc => enc.id === (out.encounterId ?? 'granary'))!;
+  const a = p.get('a');
+  if (a !== null) {
+    out.armor = enc.allowedArmor.includes(a as ArmorClass) ? a as ArmorClass : enc.defaultArmor;
+    if (out.armor !== a) out.invalid = true;
   }
   const seed = p.get('s');
-  const out: ShareState = { config };
-  const e = p.get('e');
-  const w = p.get('w');
-  const a = p.get('a');
-  if (e) out.encounterId = e;
-  if (w) out.weaponId = w;
-  if (a && ['clothing', 'light', 'medium', 'heavy'].includes(a)) out.armor = a as ArmorClass;
-  if (seed && /^\d+$/.test(seed)) out.seed = Number(seed);
+  if (seed !== null) {
+    const n = Number(seed);
+    const valid = /^\d{1,10}$/.test(seed) && Number.isSafeInteger(n) && n >= 0 && n <= 0xffffffff;
+    out.seed = valid ? n : 1;
+    if (!valid) out.invalid = true;
+  }
+  const c = p.get('c');
+  if (c !== null) {
+    try {
+      if (!c || c.length > 12000 || !/^[A-Za-z0-9_\-+/=]+$/.test(c)) throw new Error('Invalid encoding');
+      const raw: unknown = JSON.parse(fromB64Url(c));
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid config');
+      for (const [key, value] of Object.entries(raw)) {
+        const def = SETTINGS.find(s => s.key === key);
+        if (!def || (def.type === 'number' ? typeof value !== 'number' || !Number.isFinite(value) || value < def.min || value > def.max
+          : def.type === 'boolean' ? typeof value !== 'boolean'
+          : !def.options.some(o => o.value === value))) throw new Error('Invalid setting');
+      }
+      out.config = withOverrides(raw);
+    } catch {
+      out.invalid = true;
+    }
+  }
   return out;
+}
+
+export function battleShareUrl(b: BattleState): string {
+  const jubal = b.units.find(u => u.id === 'jubal');
+  return shareUrl({ encounterId: b.encounterId, weaponId: jubal?.weaponId ?? 'daggers', armor: jubal?.armorClass ?? 'clothing', seed: b.seed, config: b.config });
 }
 
 export function shareUrl(s: ShareState): string {
