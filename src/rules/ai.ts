@@ -2,8 +2,9 @@
 // action for the active unit; callers loop until it returns endTurn. Pure: reads state, never mutates it.
 
 import { SKILLS } from '../content/gear';
+import { damageAfterDefense } from './formulas';
 import { DIRS8, add, cheb, eq, key, type Vec } from './geometry';
-import { attackOptions, previewSkill, reachable, skillOptions, type AttackPreview, type Reach } from './queries';
+import { attackOptions, previewSkill, reachable, pathSafety, skillOptions, type AttackPreview, type Reach } from './queries';
 import { alive, distToUnit, lineOfSight, occupant, skillReady, tilesOf, unitById, walkable } from './state';
 import { skillTargeting, sweepTiles } from './targeting';
 import type { Action, BattleState, UnitState } from './types';
@@ -84,12 +85,14 @@ export function tileDanger(state: BattleState, u: UnitState, tile: Vec, delay: n
   return danger;
 }
 
-function scoreAttack(p: AttackPreview, u: UnitState, focus: UnitState | null): number {
+function scoreAttack(state: BattleState, p: AttackPreview, u: UnitState, focus: UnitState | null): number {
+  if (!p.targets.some((t) => unitById(state, t.unitId).side !== u.side)) return -Infinity;
   let s = 0;
   for (const t of p.targets) {
-    if (t.unitId === u.id) continue;
-    const mult = focus && t.unitId === focus.id ? 1.6 : 1;
-    s += t.expectedDamage * mult + (t.kills ? 35 * t.landChance : 0);
+    const target = unitById(state, t.unitId);
+    const utility = Math.min(t.expectedDamage, target.hp) + (t.kills ? 35 * t.landChance : 0);
+    if (target.side === u.side) s -= 2 * utility;
+    else s += utility * (focus && t.unitId === focus.id ? 1.6 : 1);
   }
   return s;
 }
@@ -101,20 +104,21 @@ interface Option {
 }
 
 function optionsFrom(state: BattleState, u: UnitState, from: Vec, focus: UnitState | null, allowSkills: boolean): Option[] {
-  const out: Option[] = attackOptions(state, u, from).map((p) => ({ preview: p, skillId: null, score: scoreAttack(p, u, focus) }));
+  const out: Option[] = attackOptions(state, u, from).map((p) => ({ preview: p, skillId: null, score: scoreAttack(state, p, u, focus) }));
   if (allowSkills) {
     for (const s of u.skills) {
       const def = SKILLS[s.id];
       if (!def || def.special || def.kind === 'sigil' || !skillReady(state, u, s.id)) continue;
       for (const p of skillOptions(state, u, s.id, from)) {
-        let score = scoreAttack(p, u, focus);
-        if (def.applies === 'dazed') score += 18; // tempo is worth a lot in an AP game
+        let score = scoreAttack(state, p, u, focus);
+        if (def.applies === 'dazed') score += p.targets.reduce((sum, t) => sum + (unitById(state, t.unitId).side !== u.side && !unitById(state, t.unitId).dazed ? 18 * t.landChance : 0), 0);
         if (def.kind === 'shove' || def.kind === 'hook') score += 6;
-        out.push({ preview: p, skillId: s.id, score: score * (def.apCost <= u.attack.apCost ? 1 : u.attack.apCost / def.apCost + 0.15) });
+        out.push({ preview: p, skillId: s.id, score });
       }
     }
   }
-  return out;
+  // Wolves cannot trade their closest-body instruction for a more profitable distant kill.
+  return out.filter((o) => o.score > 0 && (u.ai !== 'charger' || !focus || o.preview.targets.some((t) => t.unitId === focus.id)));
 }
 
 function toAction(u: UnitState, o: Option): Action {
@@ -198,6 +202,36 @@ function guardianFocus(state: BattleState, u: UnitState): UnitState | null {
   return foes.reduce((b, x) => (distToUnit(x.pos, seer) < distToUnit(b.pos, seer) ? x : b));
 }
 
+function guardianAction(state: BattleState, u: UnitState): Action {
+  const seer = state.units.find((x) => alive(x) && x.side === u.side && x.ai === 'caster');
+  const focus = guardianFocus(state, u);
+  if (!seer || !focus || u.feared) return meleeBrute(state, u, focus);
+  // Fight intruders near the caster, but do not abandon the screen to chase a distant bait.
+  const action = meleeBrute(state, u, focus);
+  if (action.type === 'attack' || action.type === 'skill') return action;
+  if (action.type === 'move' && tileDanger(state, u, u.pos, projected(state, 0, u), false) > 0) return action;
+  if (state.active!.movementLocked || state.active!.moved) return END(u);
+  const goals: Vec[] = [];
+  for (let y = seer.pos.y - 3; y <= seer.pos.y + 3; y++) for (let x = seer.pos.x - 3; x <= seer.pos.x + 3; x++) {
+    const p = { x, y };
+    const occ = occupant(state, p);
+    if (!walkable(state, p) || (occ && occ.id !== u.id) || cheb(p, seer.pos) < 1) continue;
+    // Interception: stand on the enemy-facing side, close enough to tether to the Seer.
+    if (distToUnit(p, focus) < distToUnit(seer.pos, focus)) goals.push(p);
+  }
+  goals.sort((x, y) => distToUnit(x, focus) - distToUnit(y, focus) || cheb(x, seer.pos) - cheb(y, seer.pos));
+  const goal = goals[0];
+  if (!goal) return END(u);
+  const field = distanceField(state, [goal]);
+  let best: { p: Vec; value: number } | null = null;
+  for (const r of reachable(state, u.id).values()) {
+    const p = r.path[r.path.length - 1]!;
+    const value = (field.get(key(p)) ?? 999) + tileDanger(state, u, p, projected(state, r.cost, u), false) + r.cost * 0.001;
+    if (!best || value < best.value) best = { p, value };
+  }
+  return best && !eq(best.p, u.pos) ? { type: 'move', unitId: u.id, to: best.p } : END(u);
+}
+
 function casterAction(state: BattleState, u: UnitState): Action {
   const a = state.active!;
   const foes = state.units.filter((x) => alive(x) && x.side !== u.side);
@@ -214,14 +248,20 @@ function casterAction(state: BattleState, u: UnitState): Action {
           const tg = skillTargeting(state, u, SKILLS.hellfire_sigil!, p);
           if (!tg.valid || !tg.area) continue;
           let foesHit = 0;
-          let alliesHit = 0;
+          let allyRisk = 0;
           for (const t of tg.area) {
             const o = occupant(state, t);
             if (!o) continue;
             if (o.side !== u.side) foesHit += 1;
-            else alliesHit += 1;
+            else if (state.config.delayedHitsAllies) {
+              // AI-local estimate until shared delayed-damage previews land. Do not forbid
+              // self-overlap: the caster can be baited into a profitable but dangerous sigil.
+              const raw = SKILLS.hellfire_sigil!.rawDamage! * state.config.enemyDamageMult;
+              const damage = damageAfterDefense(raw, o.mr, 0, 0);
+              allyRisk += 2 * damage / Math.max(1, raw) + (damage >= o.hp ? 4 : 0);
+            }
           }
-          const score = foesHit * 3 - alliesHit * 2 - (eq(p, u.pos) ? 10 : 0);
+          const score = foesHit * 3 - allyRisk - (eq(p, u.pos) ? 10 : 0);
           if (foesHit >= 1 && (!best || score > best.score)) best = { at: p, score };
         }
       if (best && best.score >= 3 && (best.score >= 6 || foes.length === 1 || foes.some((f) => f.dazed))) {
@@ -249,6 +289,24 @@ function casterAction(state: BattleState, u: UnitState): Action {
       }
     }
   }
+  // No one-turn shot: route around terrain toward any legal firing tile. The goal set and
+  // deterministic BFS tie order remain stable across turns; do not chase Euclidean distance.
+  if (!a.acted && !a.moved && !a.movementLocked && skillReady(state, u, 'daze_bolt')) {
+    const goals: Vec[] = [];
+    for (let y = 0; y < state.map.height; y++) for (let x = 0; x < state.map.width; x++) {
+      const p = { x, y };
+      if (walkable(state, p) && !occupant(state, p) && foes.some((f) => previewSkill(state, u, 'daze_bolt', f.pos, p))) goals.push(p);
+    }
+    const field = distanceField(state, goals);
+    const here = field.get(key(u.pos)) ?? Infinity;
+    let best: { p: Vec; value: number } | null = null;
+    for (const r of reachable(state, u.id).values()) {
+      const p = r.path[r.path.length - 1]!;
+      const value = (field.get(key(p)) ?? Infinity) + avoidAt(p, r.cost) / 25;
+      if (value < here && (!best || value < best.value)) best = { p, value };
+    }
+    if (best) return { type: 'move', unitId: u.id, to: best.p };
+  }
   // Keep distance 3+ from the nearest foe, preferring safety.
   if (!a.movementLocked && state.config.movementBudget - a.moveSpent >= u.moveApPerTile && nearestDist(u.pos) <= 2) {
     const reach = reachable(state, u.id);
@@ -272,16 +330,28 @@ function nephilimAction(state: BattleState, u: UnitState): Action {
   if (a.acted) return END(u);
   const foes = state.units.filter((x) => alive(x) && x.side !== u.side);
   const zone = sweepTiles(state);
+  const eye = state.boss?.eye ?? u.pos;
+  const exposed = foes
+    .filter((f) => lineOfSight(state, eye, f.pos) && cheb(eye, f.pos) >= 2)
+    .sort((x, y) => Number(y.attack.ranged) - Number(x.attack.ranged) || x.hp - y.hp);
+  // Derive intent from the public event history, never mutate state while querying AI.
+  let streak = 0;
+  for (let i = state.log.length - 1; i >= 0; i--) {
+    const e = state.log[i]!;
+    if (e.t === 'turnEnd' && e.unitId === u.id && e.spent === 0) break;
+    if (e.t !== 'attack' || e.attackerId !== u.id || e.free) continue;
+    if (e.name !== SKILLS.nephilim_sweep!.name) break;
+    streak++;
+  }
+  const ranged = exposed.find((f) => f.attack.ranged);
+  if (ranged && streak >= state.config.sweepStreakCap) return { type: 'skill', unitId: u.id, skillId: 'rock_throw', target: ranged.pos };
   if (foes.some((f) => zone.some((t) => eq(t, f.pos)))) {
     return { type: 'skill', unitId: u.id, skillId: 'nephilim_sweep', target: zone[0] ?? u.pos };
   }
   const camper = foes.find((f) => f.attack.ranged && (state.memory[`hidden:${f.id}`] ?? 0) >= state.config.coverCampTurns);
   if (camper) return { type: 'skill', unitId: u.id, skillId: 'rockfall', target: camper.pos };
-  const eye = state.boss?.eye ?? u.pos;
-  const exposed = foes
-    .filter((f) => lineOfSight(state, eye, f.pos) && cheb(eye, f.pos) >= 2)
-    .sort((x, y) => Number(y.attack.ranged) - Number(x.attack.ranged) || x.hp - y.hp);
-  if (exposed[0]) return { type: 'skill', unitId: u.id, skillId: 'rock_throw', target: exposed[0].pos };
+  const target = ranged ?? (state.config.rockThrowFallback === 'any-exposed' ? exposed[0] : undefined);
+  if (target) return { type: 'skill', unitId: u.id, skillId: 'rock_throw', target: target.pos };
   return END(u);
 }
 
@@ -295,7 +365,7 @@ export function enemyAction(state: BattleState): Action {
     case 'caster':
       return casterAction(state, u);
     case 'guardian':
-      return meleeBrute(state, u, guardianFocus(state, u));
+      return guardianAction(state, u);
     case 'swarm':
     case 'charger':
     default:
@@ -304,6 +374,26 @@ export function enemyAction(state: BattleState): Action {
 }
 
 // ---------------- Player bot (headless sims, "auto" button) ----------------
+
+/** AI-local until the shared hypothetical-action cost query lands. Includes move-after-fire. */
+export function plannedActionAp(state: BattleState, u: UnitState, skillId: string | null, willMove: boolean): number {
+  const profile = skillId ? SKILLS[skillId]! : u.attack;
+  return profile.apCost + (profile.stationaryDiscount && (state.active?.moved || willMove) ? state.config.bowMoveSurcharge : 0);
+}
+
+/** Expected failed-disengage damage plus danger at the tile where movement is stopped. */
+export function pathFailureCost(state: BattleState, r: Reach, danger: (tile: Vec) => number): number {
+  let survives = 1;
+  let cost = 0;
+  for (const risk of r.risks) {
+    const step = r.path[risk.index]!;
+    const held = occupant(state, step) ? r.path[Math.max(0, risk.index - 1)]! : step;
+    const aoo = Math.max(0, ...risk.engagerIds.map((id) => unitById(state, id).attack.damage)) * state.config.aooChance;
+    cost += survives * risk.chance * (danger(held) + aoo);
+    survives *= 1 - risk.chance;
+  }
+  return cost;
+}
 
 interface Plan {
   to: Vec;
@@ -321,14 +411,16 @@ function exposureToBoss(state: BattleState, u: UnitState, tile: Vec, delay: numb
 }
 
 /** A reasonably competent player: hit, then get out of anything that would land before its next turn. */
-export function botAction(state: BattleState): Action {
+export type PartyPolicy = 'expert' | 'novice';
+
+export function botAction(state: BattleState, policy: PartyPolicy = 'expert'): Action {
   const a = state.active;
   if (!a) throw new Error('no active unit');
   const u = unitById(state, a.unitId);
   const foes = state.units.filter((x) => alive(x) && x.side !== u.side);
   if (foes.length === 0) return END(u);
-  const focus = foes.reduce((b, f) => (f.hp < b.hp ? f : b));
-  const danger = (p: Vec, delay: number) => tileDanger(state, u, p, delay, true) + (u.attack.ranged ? exposureToBoss(state, u, p, delay) : 0);
+  const focus = policy === 'novice' ? nearestEnemy(state, u)! : foes.reduce((b, f) => (f.hp < b.hp ? f : b));
+  const danger = (p: Vec, delay: number) => tileDanger(state, u, p, delay, policy === 'expert') + (policy === 'expert' && u.attack.ranged ? exposureToBoss(state, u, p, delay) : 0);
   const spentNow = a.moveSpent + a.actionSpent + a.reactionSpent;
   const budget = state.config.movementBudget;
 
@@ -339,7 +431,8 @@ export function botAction(state: BattleState): Action {
     let best: { p: Vec; v: number } | null = null;
     for (const r of reachable(state, u.id).values()) {
       const p = r.path[r.path.length - 1]!;
-      const v = -danger(p, projected(state, r.cost, u)) * 10 - r.cost;
+      const delay = projected(state, r.cost + (r.cost > 0 && a.surchargePending && !a.surchargePaid ? state.config.bowMoveSurcharge : 0), u);
+      const v = -(danger(p, delay) * pathSafety(r) + pathFailureCost(state, r, (tile) => danger(tile, delay))) * 10 - r.cost;
       if (!best || v > best.v) best = { p, v };
     }
     return best && !eq(best.p, u.pos) ? { type: 'move', unitId: u.id, to: best.p } : END(u);
@@ -351,20 +444,25 @@ export function botAction(state: BattleState): Action {
     const p = r.path[r.path.length - 1]!;
     const opts = optionsFrom(state, u, p, focus, true);
     for (const o of opts) {
-      const afterAttack = r.cost + o.preview.apCost;
+
       const moveLeft = a.movementLocked ? 0 : budget - a.moveSpent - r.cost;
       const retreatReach = moveLeft >= u.moveApPerTile ? reachable(state, u.id, { budget: moveLeft, from: p }) : new Map([[key(p), { path: [p], cost: 0, risks: [] }]]);
       let bestR: { q: Vec; v: number } | null = null;
       for (const rr of retreatReach.values()) {
         const q = rr.path[rr.path.length - 1]!;
         if (!eq(q, p) && occupant(state, q) && occupant(state, q)!.id !== u.id) continue;
-        const delay = Math.max(spentNow + afterAttack + rr.cost, state.config.minTurnDelay);
-        const v = -danger(q, delay) * 3 - rr.cost * 0.05;
+        const cost = plannedActionAp(state, u, o.skillId, r.cost + rr.cost > 0);
+        const delay = Math.max(spentNow + r.cost + cost + rr.cost, state.config.minTurnDelay);
+        const risk = pathFailureCost(state, rr, (tile) => danger(tile, delay));
+        const approachRisk = pathFailureCost(state, r, (tile) => danger(tile, delay));
+        const expectedDanger = danger(q, delay) * pathSafety(rr) + risk + approachRisk;
+        // Utility per committed timeline AP; cap overkill in scoreAttack, price failed approach
+        // separately from retreat (damage has already happened when a retreat is held).
+        const v = o.score * pathSafety(r) * 100 / Math.max(1, delay) - expectedDanger * 3;
         if (!bestR || v > bestR.v) bestR = { q, v };
       }
       if (!bestR) continue;
-      const tempo = (spentNow + afterAttack) * 0.04;
-      const value = o.score + bestR.v - r.cost * 0.02 - tempo;
+      const value = bestR.v - r.cost * 0.02;
       if (!bestPlan || value > bestPlan.value) bestPlan = { to: p, opt: o, retreat: bestR.q, value };
     }
   }

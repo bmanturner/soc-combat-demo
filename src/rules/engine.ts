@@ -4,11 +4,12 @@ import { ARMOR, SKILLS, WEAPONS } from '../content/gear';
 import { DAMAGE_SCALE, UNITS, companionHp } from '../content/units';
 import type { RulesConfig } from './config';
 import { damageAfterDefense, keepEngagedChance } from './formulas';
-import { add, cheb, eq, key, sign, type Vec } from './geometry';
+import { add, cheb, eq, key, line, sign, type Vec } from './geometry';
 import { basicAttackHits, ringPenalty, skillTargeting } from './targeting';
 import { createRng, roll } from './rng';
 import {
   alive,
+  blocksSight,
   engagersLeft,
   enemiesOf,
   isFlanked,
@@ -235,7 +236,14 @@ function trackHiding(state: BattleState, boss: UnitState): void {
   for (const p of state.units) {
     if (!alive(p) || p.side === boss.side || !p.attack.ranged) continue;
     const k = `hidden:${p.id}`;
-    state.memory[k] = lineOfSight(state, eye, p.pos) ? 0 : (state.memory[k] ?? 0) + 1;
+    const coverKey = `hiddenCover:${p.id}`;
+    // Closest blocker to the ranged unit identifies its cover, not merely "out of sight".
+    // Use the same Bresenham visibility convention as lineOfSight, and numeric tile IDs so
+    // existing serializable AI memory needs no new state shape.
+    const blocker = line(p.pos, eye).slice(1, -1).find((t) => blocksSight(state, t));
+    const cover = !lineOfSight(state, eye, p.pos) && blocker ? blocker.y * state.map.width + blocker.x : -1;
+    state.memory[k] = cover < 0 ? 0 : state.memory[coverKey] === cover ? (state.memory[k] ?? 0) + 1 : 1;
+    state.memory[coverKey] = cover;
   }
 }
 
