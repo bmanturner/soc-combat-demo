@@ -12,7 +12,8 @@ export function Timeline() {
   const hoverTile = useGame((s) => s.hoverTile);
   const mode = useGame((s) => s.mode);
   const busy = useGame((s) => s.busy);
-  const pending = pendingFor({ battle, hoverTile, mode, busy });
+  const actionHover = useGame(s => s.actionHover);
+  const pending = pendingFor({ battle, hoverTile, mode, busy, actionHover });
   if (!battle) return null;
   const entries = timelineEntries(battle);
   const pos = (at: number) => `${(Math.min(Math.max(at, 0), SPAN) / SPAN) * 100}%`;

@@ -5,7 +5,8 @@ import { DEFAULT_CONFIG, type RulesConfig } from '../rules/config';
 import type { Vec } from '../rules/geometry';
 import type { Action, ArmorClass, BattleState } from '../rules/types';
 
-export type Mode = { kind: 'move' } | { kind: 'attack' } | { kind: 'skill'; skillId: string };
+export type Mode = { kind: 'move' } | { kind: 'attack'; modeId?: string } | { kind: 'skill'; skillId: string };
+export type ActionHover = 'reload' | 'swap' | null;
 
 export interface LogLine {
   id: number;
@@ -22,6 +23,9 @@ export interface GameStore {
   screen: 'menu' | 'setup' | 'battle';
   encounterId: string;
   weaponId: string;
+  secondaryWeaponId: string | null;
+  equippedSlot: 0 | 1;
+  actionHover: ActionHover;
   armor: ArmorClass;
   seed: number;
   config: RulesConfig;
@@ -47,6 +51,9 @@ export const store = createStore<GameStore>(() => ({
   screen: 'menu',
   encounterId: 'granary',
   weaponId: 'daggers',
+  secondaryWeaponId: null,
+  equippedSlot: 0,
+  actionHover: null,
   armor: 'clothing',
   seed: 1,
   config: { ...DEFAULT_CONFIG },

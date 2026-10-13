@@ -2,6 +2,7 @@
 
 import Phaser from 'phaser';
 import { SKILLS } from '../content/gear';
+import { attackModes } from '../rules/equipment';
 import { breakFreeAt } from '../rules/engine';
 import { eq, key, type Vec } from '../rules/geometry';
 import { attackOptions, bossSweepThreat, engagedPairs, pathSafety, previewAttack, previewSkill, reachable, skillOptions, type AttackPreview } from '../rules/queries';
@@ -383,7 +384,8 @@ export class BoardScene extends Phaser.Scene implements Animator {
       }
     } else if (s.mode.kind === 'attack' || s.mode.kind === 'skill') {
       const skillId = s.mode.kind === 'skill' ? s.mode.skillId : null;
-      const opts = skillId ? skillOptions(b, u, skillId) : attackOptions(b, u);
+      const modeId = s.mode.kind === 'attack' ? s.mode.modeId : undefined;
+      const opts = skillId ? skillOptions(b, u, skillId) : attackOptions(b, u).filter(o => o.modeId === (modeId ?? attackModes(b,u)[0]!.id));
       for (const opt of opts) this.markTargets(opt, 0.3);
       if (!skillId && u.attack.pattern !== 'ranged') {
         // Show the aimable directions.
@@ -392,7 +394,7 @@ export class BoardScene extends Phaser.Scene implements Animator {
       }
       const hov = s.hoverTile;
       if (hov) {
-        const p = skillId ? previewSkill(b, u, skillId, hov) : previewAttack(b, u, hov);
+        const p = skillId ? previewSkill(b, u, skillId, hov) : previewAttack(b, u, hov, u.pos, modeId);
         if (p) this.drawAttackPreview(p);
       }
     }
@@ -409,12 +411,13 @@ export class BoardScene extends Phaser.Scene implements Animator {
 
   private drawAttackPreview(p: AttackPreview): void {
     const b = this.battle()!;
-    this.fillTiles(this.overlay, p.tiles, hex(COLORS.aim), 0.45, hex(COLORS.aim));
+    const guaranteedTiles = p.candidates ? p.targets.flatMap(t => tilesOf(unitById(b,t.unitId))) : p.tiles;
+    this.fillTiles(this.overlay, guaranteedTiles, hex(COLORS.aim), 0.45, hex(COLORS.aim));
     for (const t of p.targets) {
       const tu = unitById(b, t.unitId);
       if (!alive(tu)) continue;
       const c = this.unitCenter(tu);
-      const txt = p.kind === 'skill' && p.area ? '' : `${Math.round(t.landChance * 100)}% · ${t.damageIfLands}${t.kills ? ' ☠' : ''}`;
+      const txt = p.kind === 'skill' && p.area ? '' : `${p.candidates ? 'Primary ' : ''}${Math.round(t.landChance * 100)}% · ${t.damageIfLands} dmg${t.kills ? ' ☠' : ''}`;
       if (txt) this.label(c.x, c.y - this.tile * 0.55, txt, t.kills ? '#ffd166' : '#ffffff', 0.21, 'rgba(0,0,0,0.75)');
     }
     const u = b.active ? unitById(b, b.active.unitId) : null;
@@ -426,9 +429,20 @@ export class BoardScene extends Phaser.Scene implements Animator {
         this.overlay.lineBetween(this.cx(u.pos.x), this.cy(u.pos.y), this.unitCenter(tu).x, this.unitCenter(tu).y);
       }
     }
-    if (p.note) {
+    if (p.candidates && u) this.label(this.cx(u.pos.x),this.cy(u.pos.y)+this.tile*.85,'Dashed: one random', '#ffd166',.20,'rgba(0,0,0,0.85)');
+    for (const candidate of p.candidates ?? []) {
+      const tu = unitById(b,candidate.unitId), c = this.unitCenter(tu), size = this.tile * .8;
+      this.overlay.lineStyle(2, hex(COLORS.aim), 1);
+      for (let d = 0; d < size; d += 10) {
+        const end = Math.min(d+5,size), x = c.x-size/2, y = c.y-size/2;
+        this.overlay.lineBetween(x+d,y,x+end,y); this.overlay.lineBetween(x+d,y+size,x+end,y+size);
+        this.overlay.lineBetween(x,y+d,x,y+end); this.overlay.lineBetween(x+size,y+d,x+size,y+end);
+      }
+      this.label(c.x,c.y+this.tile*.48,`${Math.round(candidate.probability*100)}%`, '#ffd166',.20,'rgba(0,0,0,0.85)');
+    }
+    if (p.note && !p.candidates) {
       const a = p.tiles[0]!;
-      this.label(this.cx(a.x), this.cy(a.y) + this.tile * 0.42, p.note, '#ffd166', 0.17);
+      this.label(this.cx(a.x), this.cy(a.y) + this.tile * 0.42, p.candidates ? 'One random secondary' : p.note, '#ffd166', 0.17);
     }
   }
 
@@ -486,10 +500,17 @@ export class BoardScene extends Phaser.Scene implements Animator {
     this.animating = true;
     const k = 1 / Math.max(0.25, speed);
     const view = structuredClone(before);
+    const strikeCounts = new Map<string,number>();
     const find = (id: string) => view.units.find((x) => x.id === id);
     try {
       for (const e of events) {
         switch (e.t) {
+          case 'reload':
+          case 'swapWeapon': {
+            const u = find(e.unitId);
+            if (u) this.float(this.unitCenter(u).x,this.unitCenter(u).y-this.tile*.3,e.t === 'reload' ? 'RELOADED' : `SWAP: ${e.newName}`,'#73baff');
+            break;
+          }
           case 'move': {
             const u = find(e.unitId);
             const tok = this.tokens.get(e.unitId);
@@ -526,6 +547,13 @@ export class BoardScene extends Phaser.Scene implements Animator {
             break;
           }
           case 'strike': {
+            const count = (strikeCounts.get(e.attackerId) ?? 0)+1;
+            strikeCounts.set(e.attackerId,count);
+            const attacker = find(e.attackerId);
+            if (count === 2 && attacker?.attack.pattern === 'dualArc') {
+              this.float(this.unitCenter(attacker).x,this.unitCenter(attacker).y-this.tile*.5,'SECOND STRIKE','#ffd166');
+              await this.wait(200*k);
+            }
             const t = find(e.targetId);
             const tok = this.tokens.get(e.targetId);
             if (!t || !tok) break;

@@ -8,7 +8,8 @@ import { useState } from 'react';
 import { useGame, useModal } from './hooks';
 import { battleShareUrl } from '../game/share';
 
-import { availableWeapons } from '../rules/equipment';
+import { availableWeapons, weaponLockReason } from '../rules/equipment';
+import { WeaponDetails } from './WeaponDetails';
 
 export function Menu() {
   return (
@@ -49,6 +50,10 @@ export function Setup() {
   const weaponId = useGame((s) => s.weaponId);
   const armor = useGame((s) => s.armor);
   const config = useGame((s) => s.config);
+  const secondaryWeaponId = useGame(s => s.secondaryWeaponId);
+  const equippedSlot = useGame(s => s.equippedSlot);
+  const [editingSlot, setEditingSlot] = useState<0 | 1>(0);
+  const selected = editingSlot === 0 ? weaponId : secondaryWeaponId;
   const enc = encounterById(encounterId);
   return (
     <div className="screen setup" data-testid="setup">
@@ -59,16 +64,21 @@ export function Setup() {
       <p className="lede">{enc.story}</p>
       <p className="lesson">Lesson: {enc.lesson}</p>
       <h3>Tubal-Cain offers you a weapon</h3>
+      {enc.id !== 'granary' && <div className="btn-row">
+        <button className={editingSlot === 0 ? 'on' : ''} onClick={() => setEditingSlot(0)}>Primary: {WEAPONS[weaponId]?.name}</button>
+        <button data-testid="edit-secondary" className={editingSlot === 1 ? 'on' : ''} onClick={() => setEditingSlot(1)}>Secondary: {secondaryWeaponId ? WEAPONS[secondaryWeaponId]?.name : 'None'}</button>
+        {editingSlot === 1 && <button onClick={() => controller.setLoadout({ secondaryWeaponId: null, equippedSlot: 0 })}>No secondary</button>}
+        <label>Start equipped <select aria-label="Start equipped" value={equippedSlot} onChange={e => controller.setLoadout({ equippedSlot: Number(e.target.value) as 0 | 1 })}><option value={0}>Primary</option><option value={1} disabled={!secondaryWeaponId}>Secondary</option></select></label>
+      </div>}
+      <p className="muted">Patterns: blue = you · solid orange = primary/affected tiles · dashed = one random secondary · dark = out of range. Directional shapes rotate with aim; sweep always surrounds you.</p>
       <div className="choice-grid">
-        {availableWeapons(enc, config).map((w) => {
-          const id = w.id;
+        {availableWeapons(enc, { ...config, unlockSpecialWeapons: true }).map((w) => {
+          const id = w.id, lock = weaponLockReason(w, config);
           return (
-            <button key={id} className={`choice ${weaponId === id ? 'on' : ''}`} onClick={() => controller.setLoadout({ weaponId: id })} data-testid={`weapon-${id}`}>
-              <div className="choice-name">{weaponId === id ? '✓ ' : ''}{w.name}</div>
-              <PatternGlyph pattern={w.attack.pattern} />
-              <div className="choice-stats">
-                {w.attack.apCost} AP · {w.attack.damage} dmg · {Math.round(w.attack.hit * 100)}% hit
-              </div>
+            <button key={id} className={`choice ${selected === id ? 'on' : ''}`} disabled={!!lock} onClick={() => controller.setLoadout(editingSlot === 0 ? { weaponId: id } : { secondaryWeaponId: id })} data-testid={`weapon-${id}`}>
+              <div className="choice-name">{selected === id ? '✓ ' : ''}{w.name}</div>
+              {lock && <div className="warn">Locked: {lock}</div>}
+              <WeaponDetails weapon={w} config={config} level={enc.jubalLevel} />
               <div className="choice-blurb">{w.blurb}</div>
             </button>
           );
@@ -101,39 +111,6 @@ export function Setup() {
   );
 }
 
-/** Tiny 3×3 diagram of a weapon pattern aimed north. */
-function PatternGlyph({ pattern }: { pattern: string }) {
-  const hit: Record<string, number[]> = {
-    cardinal: [1],
-    pairCw: [1, 2],
-    line2: [1, -1],
-    arc5: [0, 1, 2, 3, 5],
-    adjacent: [1],
-    ranged: [],
-  };
-  const cells = hit[pattern] ?? [];
-  return (
-    <div className={`pattern ${pattern === 'line2' ? 'tall' : ''}`}>
-      {pattern === 'line2' && (
-        <div className="prow">
-          <i />
-          <i className="hit" />
-          <i />
-        </div>
-      )}
-      <div className="prow">
-        {[0, 1, 2].map((i) => (
-          <i key={i} className={cells.includes(i) ? 'hit' : ''} />
-        ))}
-      </div>
-      <div className="prow">
-        <i className={cells.includes(3) ? 'hit' : ''} />
-        <i className="me" />
-        <i className={cells.includes(5) ? 'hit' : ''} />
-      </div>
-    </div>
-  );
-}
 
 export function report(b: BattleState): string {
   const enc = encounterById(b.encounterId);
@@ -147,7 +124,8 @@ export function report(b: BattleState): string {
     });
   return [
     `## ${enc.name}: ${b.outcome.toUpperCase()} at ${Math.round(b.clock)} AP`,
-    `Jubal: ${WEAPONS[jubal?.weaponId ?? '']?.name ?? '?'} + ${ARMOR[jubal?.armorClass ?? 'light'].name} · seed ${b.seed}`,
+    `Jubal: ${b.setup.weaponIds.filter(Boolean).map(id => WEAPONS[id!]?.name ?? '?').join(' / ')} + ${ARMOR[jubal?.armorClass ?? 'light'].name} · starting slot ${(b.setup.equippedSlot ?? 0) + 1} · seed ${b.seed}`,
+    ...b.units.filter(u => u.side === 'player').map(u => `${u.name}: reloads ${b.telemetry[u.id]!.reloads}, swaps ${b.telemetry[u.id]!.swaps}`),
     '',
     '| Unit | HP | Turns | Move AP | Action AP | Wait AP | Dealt | Taken | Escaped | Caught | Held/tries |',
     '|---|---|---|---|---|---|---|---|---|---|---|',
@@ -340,7 +318,7 @@ export function HelpOverlay() {
           <li><b>Telegraphs.</b> Red tiles land after a delay. Escape requires a turn before impact (or a tie when units act first), enough movement and a reachable safe tile. Engagement can still hold you.</li>
           <li><b>Wait</b> on an empty turn costs {cfg.minTurnDelay} AP: a cheap way to slip behind an enemy's turn.</li>
         </ul>
-        <p className="muted">Keys: M move · A attack · 1–2 skills · Space end turn · Esc / right-click cancel.</p>
+        <p className="muted">Keys: M move · A attack · T cycle mode · R reload · W swap · 1–9 skills · Space end turn · Esc / right-click cancel.</p>
         <button className="primary" onClick={() => store.setState({ helpOpen: false })}>Got it</button>
       </div>
     </div>

@@ -1,8 +1,9 @@
 // Derived, hover-dependent previews shared by the HUD (timeline ghost, action panel).
 
+import { attackModes } from '../rules/equipment';
 import { SKILLS } from '../content/gear';
 import { eq, key, type Vec } from '../rules/geometry';
-import { bossSweepThreat, dangerAt, escapeOutlook, previewAttack, previewSkill, projectedNextTurn, reachable } from '../rules/queries';
+import { bossSweepThreat, dangerAt, escapeOutlook, previewAttack, previewReload, previewSwap, previewSkill, projectedNextTurn, reachable } from '../rules/queries';
 import { unitById } from '../rules/state';
 import { unitActsBefore } from '../rules/resolvers';
 import type { BattleState, UnitState } from '../rules/types';
@@ -42,10 +43,17 @@ export function judge(b: BattleState, tile: Vec, projected: number): { danger: P
   return { danger: 'none', text: '' };
 }
 
-export function pendingFor(s: Pick<GameStore, 'battle' | 'hoverTile' | 'mode' | 'busy'>): Pending | null {
+export function pendingFor(s: Pick<GameStore, 'battle' | 'hoverTile' | 'mode' | 'busy'> & Partial<Pick<GameStore, 'actionHover'>>): Pending | null {
   const b = s.battle;
   const u = activePlayer(b);
-  if (!b || !u || !s.hoverTile || s.busy) return null;
+  if (!b || !u || s.busy) return null;
+  if (s.actionHover) {
+    const p = s.actionHover === 'reload' ? previewReload(b,u) : previewSwap(b,u,u.equippedSlot === 0 ? 1 : 0);
+    if (!p.valid) return null;
+    const j = judge(b,u.pos,p.nextTurnIn);
+    return {extra:p.apCost, tile:u.pos, what:s.actionHover === 'reload' ? 'Reload' : 'Swap', projected:p.nextTurnIn, danger:j.danger, dangerText:j.text};
+  }
+  if (!s.hoverTile) return null;
   const a = b.active!;
   const tile = s.hoverTile;
   if (s.mode.kind === 'move') {
@@ -67,11 +75,11 @@ export function pendingFor(s: Pick<GameStore, 'battle' | 'hoverTile' | 'mode' | 
     return null;
   }
   if (a.acted) return null;
-  const p = s.mode.kind === 'skill' ? previewSkill(b, u, s.mode.skillId, tile) : previewAttack(b, u, tile);
+  const p = s.mode.kind === 'skill' ? previewSkill(b, u, s.mode.skillId, tile) : previewAttack(b, u, tile, u.pos, s.mode.kind === 'attack' ? s.mode.modeId : undefined);
   if (!p) return null;
   const projected = projectedNextTurn(b, p.apCost);
   const j = judge(b, u.pos, projected);
-  const what = s.mode.kind === 'skill' ? (SKILLS[s.mode.skillId]?.name ?? 'Skill') : u.attack.name;
+  const what = s.mode.kind === 'skill' ? (SKILLS[s.mode.skillId]?.name ?? 'Skill') : (attackModes(b,u).find(m => m.id === p.modeId)?.name ?? u.attack.name);
   return { extra: p.apCost, tile: u.pos, what, projected, danger: j.danger, dangerText: j.text };
 }
 
