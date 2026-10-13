@@ -1,3 +1,4 @@
+import { GranaryGuide } from './Guidance';
 import { useEffect } from 'react';
 import { controller } from '../game/controller';
 import { activePlayer } from '../game/preview';
@@ -48,6 +49,7 @@ function Battle() {
     <div className="battle" data-testid="battle">
       <TopBar />
       <Timeline />
+      <GranaryGuide />
       <div className="battle-main">
         <ActionPanel />
         <BoardHost />

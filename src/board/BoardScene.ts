@@ -1,6 +1,7 @@
 // Board rendering and animation (Phaser 4). Reads the store; never changes rules state.
 
 import Phaser from 'phaser';
+import { patternTiles } from '../rules/patterns';
 import { SKILLS } from '../content/gear';
 import { attackModes } from '../rules/equipment';
 import { breakFreeAt } from '../rules/engine';
@@ -89,7 +90,13 @@ export class BoardScene extends Phaser.Scene implements Animator {
     this.version = store.getState().boardVersion;
     // Test hook: canvas-relative pixel center of a tile.
     const w = window as unknown as { __soc?: Record<string, unknown> };
-    if (w.__soc) w.__soc.tileCenter = (x: number, y: number) => ({ x: this.cx(x), y: this.cy(y) });
+    if (w.__soc) {
+      w.__soc.tileCenter = (x: number, y: number) => ({ x: this.cx(x), y: this.cy(y) });
+      w.__soc.labelBounds = () => ({
+        labels: this.labels.map(t => ({ text: t.text, ...t.getBounds() })),
+        units: [...this.tokens.entries()].map(([id, t]) => ({ id, ...t.root.getBounds() })),
+      });
+    }
     this.rebuild();
   }
 
@@ -127,10 +134,10 @@ export class BoardScene extends Phaser.Scene implements Animator {
   private layout(b: BattleState): void {
     const w = this.scale.width;
     const h = this.scale.height;
-    this.tile = Math.max(28, Math.floor(Math.min((w - 24) / b.map.width, (h - 24) / b.map.height)));
+    this.tile = Math.max(28, Math.floor(Math.min((w - 24) / b.map.width, (h - 164) / b.map.height)));
     this.tile = Math.min(this.tile, 84);
     this.ox = Math.floor((w - this.tile * b.map.width) / 2);
-    this.oy = Math.floor((h - this.tile * b.map.height) / 2);
+    this.oy = 140 + Math.floor((h - 140 - this.tile * b.map.height) / 2);
   }
 
   private rebuild(): void {
@@ -209,8 +216,8 @@ export class BoardScene extends Phaser.Scene implements Animator {
       .setOrigin(0.5);
     const hp = this.add.graphics();
     // Status badge sits on the token's own top edge so it never covers the tile above.
-    const badgeY = big ? -h / 2 + 4 : -this.tile * 0.36 + 3;
-    const badge = this.add.text(0, badgeY, '', { fontFamily: UI_FONT, fontSize: `${Math.max(9, Math.round(this.tile * 0.15))}px`, color: '#ffd166', fontStyle: 'bold', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1);
+    const badgeY = big ? -h / 2 + 4 : -this.tile * 0.48;
+    const badge = this.add.text(0, badgeY, '', { fontFamily: UI_FONT, fontSize: `${Math.max(9, Math.round(this.tile * 0.15))}px`, color: '#ffd166', fontStyle: 'bold', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 0);
     root.add([body, glyph, hp, badge]);
     if (big) {
       const name = this.add.text(0, h * 0.18, u.name.toUpperCase(), { fontFamily: FONT, fontSize: `${Math.round(this.tile * 0.2)}px`, color: '#e8c9a0' }).setOrigin(0.5);
@@ -225,7 +232,7 @@ export class BoardScene extends Phaser.Scene implements Animator {
     const g = tok.body;
     g.clear();
     const side = u.side === 'player' ? COLORS.party : COLORS.enemy;
-    const r = this.tile * 0.36;
+    const r = this.tile * 0.30;
     if (u.footprint.length > 1) {
       const w = tok.w - 8;
       const h = tok.h - 8;
@@ -253,7 +260,7 @@ export class BoardScene extends Phaser.Scene implements Animator {
     const hp = tok.hp;
     hp.clear();
     const bw = u.footprint.length > 1 ? tok.w * 0.6 : this.tile * 0.74;
-    const by = u.footprint.length > 1 ? tok.h * 0.32 : r + 4;
+    const by = u.footprint.length > 1 ? tok.h * 0.32 : this.tile * 0.34;
     const frac = Math.max(0, u.hp / u.maxHp);
     hp.fillStyle(0x000000, 0.7);
     hp.fillRect(-bw / 2 - 1, by - 1, bw + 2, 7);
@@ -287,7 +294,17 @@ export class BoardScene extends Phaser.Scene implements Animator {
   private label(x: number, y: number, text: string, color = '#ffffff', size = 0.22, bg?: string): Phaser.GameObjects.Text {
     const style: Phaser.Types.GameObjects.Text.TextStyle = { fontFamily: UI_FONT, fontSize: `${Math.max(10, Math.round(this.tile * size))}px`, color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 };
     if (bg) Object.assign(style, { backgroundColor: bg, padding: { x: 4, y: 2 } });
-    const txt = this.add.text(x, y, text, style).setOrigin(0.5).setDepth(20);
+    const txt = this.add.text(0, 0, text, style).setOrigin(0).setDepth(20);
+    // Reserved annotation lane above the board: no token, HP or badge can
+    // intersect it. Wrap labels, with leaders identifying the original tile.
+    txt.setWordWrapWidth(this.scale.width - 24);
+    const previous = this.labels.at(-1);
+    let lx = previous ? previous.x + previous.width + 12 : 12;
+    let ly = previous?.y ?? 8;
+    if (lx + txt.width > this.scale.width - 12) { lx = 12; ly += (previous?.height ?? 20) + 5; }
+    txt.setPosition(lx, ly);
+    this.links.lineStyle(1, 0xffffff, 0.25);
+    this.links.lineBetween(lx + txt.width / 2, ly + txt.height, x, y);
     this.labels.push(txt);
     return txt;
   }
@@ -312,6 +329,7 @@ export class BoardScene extends Phaser.Scene implements Animator {
         tok.root.setPosition(c.x, c.y);
         this.paintToken(tok, u, b.active?.unitId === u.id, s.hoverUnitId === u.id);
         tok.badge.setText(this.statusBadge(b, u));
+        tok.badge.setScale(Math.min(1, (tok.w - 4) / Math.max(1, tok.badge.width)));
       }
     }
 
@@ -385,6 +403,11 @@ export class BoardScene extends Phaser.Scene implements Animator {
     } else if (s.mode.kind === 'attack' || s.mode.kind === 'skill') {
       const skillId = s.mode.kind === 'skill' ? s.mode.skillId : null;
       const modeId = s.mode.kind === 'attack' ? s.mode.modeId : undefined;
+      const selected = attackModes(b, u).find(m => m.id === modeId);
+      if (!skillId && selected?.pattern === 'ring8') {
+        this.fillTiles(this.overlay, patternTiles('ring8', u.pos, 0).map(p => p.tile).filter(p => p.x >= 0 && p.y >= 0 && p.x < b.map.width && p.y < b.map.height), hex(COLORS.aim), 0.25, hex(COLORS.aim));
+        this.label(this.cx(u.pos.x), this.cy(u.pos.y), `${selected.name} · ${selected.apCost} AP · click self or ring to commit`, '#ffd166', 0.2);
+      }
       const opts = skillId ? skillOptions(b, u, skillId) : attackOptions(b, u).filter(o => o.modeId === (modeId ?? attackModes(b,u)[0]!.id));
       for (const opt of opts) this.markTargets(opt, 0.3);
       if (!skillId && u.attack.pattern !== 'ranged') {
@@ -417,7 +440,7 @@ export class BoardScene extends Phaser.Scene implements Animator {
       const tu = unitById(b, t.unitId);
       if (!alive(tu)) continue;
       const c = this.unitCenter(tu);
-      const txt = p.kind === 'skill' && p.area ? '' : `${p.candidates ? 'Primary ' : ''}${Math.round(t.landChance * 100)}% · ${t.damageIfLands} dmg${t.kills ? ' ☠' : ''}`;
+      const txt = p.kind === 'skill' && p.area ? '' : `${tu.name}: ${p.candidates ? 'Primary ' : ''}${Math.round(t.landChance * 100)}% · ${t.damageIfLands} dmg${t.kills ? ' ☠' : ''}`;
       if (txt) this.label(c.x, c.y - this.tile * 0.55, txt, t.kills ? '#ffd166' : '#ffffff', 0.21, 'rgba(0,0,0,0.75)');
     }
     const u = b.active ? unitById(b, b.active.unitId) : null;
@@ -438,7 +461,7 @@ export class BoardScene extends Phaser.Scene implements Animator {
         this.overlay.lineBetween(x+d,y,x+end,y); this.overlay.lineBetween(x+d,y+size,x+end,y+size);
         this.overlay.lineBetween(x,y+d,x,y+end); this.overlay.lineBetween(x+size,y+d,x+size,y+end);
       }
-      this.label(c.x,c.y+this.tile*.48,`${Math.round(candidate.probability*100)}%`, '#ffd166',.20,'rgba(0,0,0,0.85)');
+      this.label(c.x,c.y+this.tile*.48,`${tu.name}: ${Math.round(candidate.probability*100)}% secondary`, '#ffd166',.20,'rgba(0,0,0,0.85)');
     }
     if (p.note && !p.candidates) {
       const a = p.tiles[0]!;

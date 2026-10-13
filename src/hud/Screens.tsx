@@ -1,3 +1,4 @@
+import { Provenance } from './Guidance';
 import { ENCOUNTERS, encounterById } from '../content/encounters';
 import { ARMOR, WEAPONS } from '../content/gear';
 import { DEFAULT_CONFIG, SETTINGS, diffFromDefaults, type RulesConfig, type SettingDef } from '../rules/config';
@@ -96,6 +97,7 @@ export function Setup() {
               <div className="choice-stats">
                 Armor {a.armor} · Dodge {Math.round(a.dodge * 100)}% · {moveAp} AP/tile · {Math.floor(config.movementBudget / moveAp)} tiles per move
               </div>
+              <Provenance value={a} />
               <div className="choice-blurb">{allowed ? `Default example: ${a.blurb}` : 'Jubal starts in village clothing. Armor comes later.'}</div>
             </button>
           );
@@ -145,7 +147,8 @@ export function ResultOverlay() {
   const [dismissed, setDismissed] = useState<number | null>(null);
   const visible = !!battle && battle.outcome !== 'ongoing' && !busy && dismissed !== generation;
   const modal = useModal(visible);
-  if (!visible || !battle) return null;
+  if (!battle || battle.outcome === 'ongoing' || busy) return null;
+  if (!visible) return <button className="results-reopen" data-testid="reopen-results" onClick={() => setDismissed(null)}>Results / Copy report</button>;
   const win = battle.outcome === 'victory';
   const party = battle.units.filter((u) => u.side === 'player');
   return (
@@ -215,7 +218,10 @@ function SettingsContent() {
   const config = useGame((s) => s.config);
   const hasBattle = useGame((s) => !!s.battle);
   const [draft, setDraft] = useState<RulesConfig | null>(null);
+  const [search, setSearch] = useState('');
+  const [changedOnly, setChangedOnly] = useState(false);
   const cfg = draft ?? config;
+  const matches = SETTINGS.filter(s => (!changedOnly || cfg[s.key] !== DEFAULT_CONFIG[s.key]) && `${s.label} ${s.key} ${s.why}`.toLowerCase().includes(search.toLowerCase()));
   const groups = [...new Set(SETTINGS.map((s) => s.group))];
   const set = (k: keyof RulesConfig, v: unknown) => setDraft({ ...cfg, [k]: v } as RulesConfig);
   const close = () => {
@@ -228,7 +234,7 @@ function SettingsContent() {
       <div ref={modal} role="dialog" aria-modal="true" aria-label="Rules and settings" tabIndex={-1} className="drawer" onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } }} onClick={(e) => e.stopPropagation()} data-testid="settings">
         <div className="drawer-head">
           <h2>Rules & settings</h2>
-          <button onClick={close}>✕</button>
+          <button aria-label="Close rules" onClick={close}>✕</button>
         </div>
         <p className="muted">
           Every rule the design docs leave open is a setting here. Badges show where each value comes from. Change anything, then copy the link: it
@@ -255,10 +261,15 @@ function SettingsContent() {
           </button>
           <span className="muted">{changed} changed</span>
         </div>
-        {groups.map((g) => (
-          <section key={g}>
-            <h3>{g}</h3>
-            {SETTINGS.filter((s) => s.group === g).map((s) => (
+        <label>Search rules <input type="search" aria-describedby="rule-search-why" value={search} onChange={e => setSearch(e.target.value)} /></label>
+        <label><input type="checkbox" aria-describedby="rule-search-why" checked={changedOnly} onChange={e => setChangedOnly(e.target.checked)} /> Changed only</label>
+        <p id="rule-search-why" className="setting-why">Search labels, rule keys and rationale. Changed only shows values that differ from defaults.</p>
+        <nav aria-label="Rule groups" className="rule-groups">{groups.map((g, i) => <button key={g} onClick={() => document.getElementById(`rule-group-${i}`)?.scrollIntoView({ block: 'start' })}>{g}</button>)}</nav>
+        {!matches.length && <p>No matching rules.</p>}
+        {groups.map((g, i) => (
+          <section key={g} id={`rule-group-${i}`}>
+            {matches.some(s => s.group === g) && <h3>{g}</h3>}
+            {matches.filter((s) => s.group === g).map((s) => (
               <SettingRow key={s.key} def={s} value={cfg[s.key]} onChange={(v) => set(s.key, v)} changed={cfg[s.key] !== DEFAULT_CONFIG[s.key]} />
             ))}
           </section>
@@ -273,19 +284,19 @@ function SettingRow({ def, value, onChange, changed }: { def: SettingDef; value:
   return (
     <div className={`setting ${changed ? 'changed' : ''}`} data-testid={`setting-${def.key}`}>
       <div className="setting-top">
-        <label>{def.label}</label>
+        <label htmlFor={`rule-${def.key}`}>{def.label}</label>
         <span className={`badge ${def.status}`}>{STATUS_LABEL[def.status]}</span>
       </div>
       <div className="setting-control">
-        {def.type === 'boolean' && <input type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />}
+        {def.type === 'boolean' && <input id={`rule-${def.key}`} aria-describedby={`why-${def.key}`} type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />}
         {def.type === 'number' && (
           <>
-            <input type="range" min={def.min} max={def.max} step={def.step} value={Number(value)} onChange={(e) => onChange(Number(e.target.value))} />
+            <input id={`rule-${def.key}`} aria-describedby={`why-${def.key}`} type="range" min={def.min} max={def.max} step={def.step} value={Number(value)} onChange={(e) => onChange(Number(e.target.value))} />
             <span className="setting-val">{fmt(Number(value))}</span>
           </>
         )}
         {def.type === 'select' && (
-          <select value={String(value)} onChange={(e) => onChange(e.target.value)}>
+          <select id={`rule-${def.key}`} aria-describedby={`why-${def.key}`} value={String(value)} onChange={(e) => onChange(e.target.value)}>
             {def.options.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -294,7 +305,8 @@ function SettingRow({ def, value, onChange, changed }: { def: SettingDef; value:
           </select>
         )}
       </div>
-      <div className="setting-why">{def.why}</div>
+      <button disabled={!changed} aria-label={`Reset ${def.label}`} onClick={() => onChange(DEFAULT_CONFIG[def.key])}>Reset</button>
+      <div id={`why-${def.key}`} className="setting-why">{def.why}</div>
     </div>
   );
 }

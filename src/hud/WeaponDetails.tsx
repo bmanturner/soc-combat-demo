@@ -3,7 +3,7 @@ import { scaledMode } from "../rules/equipment";
 import type { RulesConfig } from "../rules/config";
 import type { AttackMode, WeaponDef } from "../rules/types";
 
-function Pattern({ mode }: { mode: AttackMode }) {
+export function Pattern({ mode }: { mode: AttackMode }) {
   const ring = [
     [-1, -1],
     [0, -1],

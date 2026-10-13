@@ -6,7 +6,7 @@ import { botAction, enemyAction } from '../rules/ai';
 import { DEFAULT_CONFIG, type RulesConfig } from '../rules/config';
 import { describeEvent } from '../rules/describe';
 import { RulesError, applyAction, createBattle } from '../rules/engine';
-import { eq, key, type Vec } from '../rules/geometry';
+import { cheb, eq, key, type Vec } from '../rules/geometry';
 import { attackOptions, previewAttack, previewSkill, reachable } from '../rules/queries';
 import { occupant, unitById } from '../rules/state';
 import type { Action, BattleState, GameEvent } from '../rules/types';
@@ -220,7 +220,8 @@ export const controller = {
   },
 
   setMode(mode: Mode): void {
-    store.setState({ mode, actionHover: null });
+    const u = activePlayer(store.getState().battle);
+    store.setState({ mode, actionHover: null, ...(mode.kind === 'attack' && mode.modeId === 'sweep' && u ? { hoverTile: u.pos } : {}) });
   },
 
   cycleMode(): void {
@@ -298,6 +299,9 @@ export const controller = {
       return;
     }
     if (s.mode.kind === 'attack') {
+      const modeId = s.mode.modeId;
+      const mode = attackModes(state, u).find(m => m.id === modeId);
+      if (mode?.pattern === 'ring8' && cheb(tile, u.pos) > 1) return showToast('Click yourself or a surrounding ring tile to commit Sweep.');
       if (a.acted) return showToast('Already acted this turn.');
       if (!previewAttack(state, u, tile, u.pos, s.mode.modeId)) return showToast('No target in this mode’s range and pattern.');
       await apply({ type: 'attack', unitId: u.id, target: tile, modeId: s.mode.modeId });

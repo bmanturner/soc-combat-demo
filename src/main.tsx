@@ -20,6 +20,18 @@ store.setState({
 });
 if (shared.encounterId && ENCOUNTERS.some((e) => e.id === shared.encounterId)) controller.openSetup(shared.encounterId);
 
+window.addEventListener('hashchange', () => {
+  const next = decodeShare(location.hash);
+  if (store.getState().battle?.outcome === 'ongoing' && !window.confirm('Load shared setup and replace the current fight?')) {
+    history.replaceState(null, '', controller.shareLink());
+    return;
+  }
+  controller.openMenu();
+  store.setState({ config: next.config, weaponId: next.weaponId ?? 'daggers', secondaryWeaponId: next.secondaryWeaponId ?? null, equippedSlot: next.equippedSlot ?? 0, armor: next.armor ?? 'clothing', seed: next.seed ?? 1, botParty: false });
+  if (next.encounterId) controller.openSetup(next.encounterId);
+  if (next.invalid) showToast('Invalid share-link values were replaced with defaults.');
+});
+
 // Test/debug handle (Playwright drives the game through this; harmless in production).
 (window as unknown as { __soc: unknown }).__soc = { store, controller };
 

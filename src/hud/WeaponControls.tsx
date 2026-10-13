@@ -63,14 +63,7 @@ export function WeaponControls({
                   : ""
               }
               disabled={busy || b.active?.acted}
-              onMouseEnter={() => {
-                controller.setMode({ kind: "attack", modeId: m.id });
-                if (m.id === "sweep") controller.hover(u.pos);
-              }}
-              onClick={() => {
-                controller.setMode({ kind: "attack", modeId: m.id });
-                if (m.id === "sweep") void controller.clickTile(u.pos);
-              }}
+              onClick={() => controller.setMode({ kind: "attack", modeId: m.id })}
             >
               {m.name} · {basicAttackApCost(b, u, m.id)} AP
             </button>

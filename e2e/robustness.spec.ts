@@ -38,12 +38,12 @@ test('U-12 all drawer close paths discard drafts, including focused Escape', asy
     await slider.fill('85');
     await slider.focus();
     if (close === 'escape') await page.keyboard.press('Escape');
-    else if (close === 'button') await page.getByRole('button', { name: '✕', exact: true }).click();
+    else if (close === 'button') await page.getByRole('button', { name: 'Close rules', exact: true }).click();
     else await page.locator('.drawer-wrap').click({ position: { x: 5, y: 5 } });
     await expect(page.getByTestId('settings')).toBeHidden();
     await page.getByTestId('open-settings').click();
     await expect(slider).toHaveValue('50');
-    await page.getByRole('button', { name: '✕', exact: true }).click();
+    await page.getByRole('button', { name: 'Close rules', exact: true }).click();
   }
 });
 
