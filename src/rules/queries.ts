@@ -1,7 +1,8 @@
 // UI/AI queries: reachable tiles with engagement risk, attack previews, timeline projections.
 
 import { SKILLS } from '../content/gear';
-import { keepEngagedChance, totalAvoidance, damageAfterDefense } from './formulas';
+import { keepEngagedChance, totalAvoidance } from './formulas';
+import { actionApCost, allowedReactions, delayedDamage, effectCanHit, hypotheticalBoard, resolvedDamage, resolveSkill, schedulerCompare, turnDelay, unitActsBefore, unitSchedule } from './resolvers';
 import { DIRS8, add, eq, key, type Vec } from './geometry';
 import { patternDirections } from './patterns';
 import { basicAttackHits, ringPenalty, skillTargeting, sweepTiles } from './targeting';
@@ -115,31 +116,29 @@ export interface TargetPreview {
   flanked: boolean;
 }
 
-export function expectedStrike(state: BattleState, attacker: UnitState, target: UnitState, opts: { hit: number; damage: number; pctPen: number; flatPen: number; ranged: boolean; damageType: 'physical' | 'magic'; noReactions?: boolean }): TargetPreview {
+export function expectedStrike(state: BattleState, attacker: UnitState, target: UnitState, opts: { hit: number; damage: number; pctPen: number; flatPen: number; ranged: boolean; damageType: 'physical' | 'magic'; noReactions?: boolean; allowedReactions?: ('dodge' | 'parry' | 'block')[] }): TargetPreview {
   const cfg = state.config;
   const hitChance = Math.min(0.95, Math.max(0.05, opts.hit));
   const flanked = isFlanked(state, target);
   const mult = flanked ? cfg.flankReactionMult : 1;
   const reactions: number[] = [];
   if (cfg.reactionsEnabled && !target.dazed && !opts.noReactions) {
-    if (!target.immobile) reactions.push(target.dodge * mult);
-    if (!opts.ranged) reactions.push(target.parry * mult);
-    reactions.push(target.block * mult);
+    const allowed = allowedReactions(opts);
+    if (!target.immobile && allowed.includes('dodge')) reactions.push(target.dodge * mult);
+    if (allowed.includes('parry')) reactions.push(target.parry * mult);
+    if (allowed.includes('block')) reactions.push(target.block * mult);
   }
   const avoidChance = totalAvoidance(reactions);
   const landChance = hitChance * (1 - avoidChance);
-  const defense = opts.damageType === 'physical' ? target.armor : target.mr;
-  let dmg = damageAfterDefense(opts.damage, defense, opts.pctPen, opts.flatPen);
-  if (flanked) dmg *= 1 + cfg.flankDamageTaken;
-  const damageIfLands = Math.max(1, Math.round(dmg));
-  const critAdj = 1 + cfg.critChance * (cfg.critMult - 1);
+  const damageIfLands = resolvedDamage(state, target, opts.damage, opts.damageType, opts.pctPen, opts.flatPen);
+  const criticalDamage = resolvedDamage(state, target, opts.damage * cfg.critMult, opts.damageType, opts.pctPen, opts.flatPen);
   return {
     unitId: target.id,
     name: target.name,
     hitChance,
     avoidChance,
     landChance,
-    expectedDamage: landChance * damageIfLands * critAdj,
+    expectedDamage: landChance * (damageIfLands * (1 - cfg.critChance) + criticalDamage * cfg.critChance),
     damageIfLands,
     kills: damageIfLands >= target.hp,
     flanked,
@@ -157,20 +156,22 @@ export interface AttackPreview {
 }
 
 export function basicAttackApCost(state: BattleState, u: UnitState): number {
-  const moved = state.active?.unitId === u.id && state.active.moved;
-  return u.attack.stationaryDiscount && moved ? u.attack.apCost + state.config.bowMoveSurcharge : u.attack.apCost;
+  return actionApCost(state, u, u.attack);
 }
 
 /** Preview a basic attack aimed at a tile (or null if it can't be aimed there). */
 export function previewAttack(state: BattleState, u: UnitState, anchor: Vec, from: Vec = u.pos): AttackPreview | null {
-  const moved = { ...u, pos: from };
+  const hypotheticalMove = !eq(u.pos, from);
+  state = hypotheticalBoard(state, u, from);
+  u = unitById(state, u.id);
+  const moved = u;
   const res = basicAttackHits(state, moved, anchor);
   if (!res) return null;
   const targets = res.hits
     .filter((h) => h.unit.side !== u.side || state.config.friendlyFire)
     .map((h) => expectedStrike(state, u, h.unit, { ...u.attack, hit: u.attack.hit - ringPenalty(state, h.ring) }));
   if (targets.length === 0) return null;
-  return { kind: 'attack', anchor, tiles: res.tiles, apCost: basicAttackApCost(state, u), targets };
+  return { kind: 'attack', anchor, tiles: res.tiles, apCost: actionApCost(state, u, u.attack, hypotheticalMove), targets };
 }
 
 /** All anchors where a basic attack from `from` would hit at least one enemy. */
@@ -198,35 +199,33 @@ export function attackOptions(state: BattleState, u: UnitState, from: Vec = u.po
 }
 
 export function skillCost(state: BattleState, u: UnitState, skill: SkillDef): number {
-  const moved = state.active?.unitId === u.id && state.active.moved;
-  return skill.stationaryDiscount && moved ? skill.apCost + state.config.bowMoveSurcharge : skill.apCost;
+  return actionApCost(state, u, skill);
 }
 
 export function previewSkill(state: BattleState, u: UnitState, skillId: string, anchor: Vec, from: Vec = u.pos): AttackPreview | null {
   const skill = SKILLS[skillId];
   if (!skill) return null;
-  const moved = { ...u, pos: from };
+  const hypotheticalMove = !eq(u.pos, from);
+  state = hypotheticalBoard(state, u, from);
+  u = unitById(state, u.id);
+  const moved = u;
   const tg = skillTargeting(state, moved, skill, anchor);
   if (!tg.valid) return null;
-  const cost = skillCost(state, u, skill);
+  const cost = actionApCost(state, u, skill, hypotheticalMove);
+  const { profile, delay } = resolveSkill(state, u, skill);
   if (skill.kind === 'sigil' || skill.kind === 'sweep') {
-    const victims = state.units.filter((x) => alive(x) && tilesOf(x).some((t) => tg.area!.some((a) => eq(a, t))));
+    const victims = state.units.filter((x) => effectCanHit(state, { sourceId: u.id }, x) && tilesOf(x).some((t) => tg.area!.some((a) => eq(a, t))));
     return {
       kind: 'skill', anchor, tiles: tg.area!, area: tg.area!, apCost: cost,
-      targets: victims.map((x) => ({ unitId: x.id, name: x.name, hitChance: 1, avoidChance: 0, landChance: 1, expectedDamage: 0, damageIfLands: 0, kills: false, flanked: false })),
-      note: `Erupts in ${skill.delay} AP`,
+      targets: victims.map((x) => {
+        const damage = delayedDamage(state, profile, x);
+        return { unitId: x.id, name: x.name, hitChance: 1, avoidChance: 0, landChance: 1, expectedDamage: damage, damageIfLands: damage, kills: damage >= x.hp, flanked: isFlanked(state, x) };
+      }),
+      note: `Erupts in ${delay} AP`,
     };
   }
   const t = tg.target!;
-  const raw = skill.rawDamage !== undefined ? skill.rawDamage : u.attack.damage;
-  const tp = expectedStrike(state, u, t, {
-    hit: (skill.rawDamage !== undefined ? 0.9 : u.attack.hit) + (skill.hitBonus ?? 0),
-    damage: raw * skill.damageMult,
-    pctPen: skill.rawDamage !== undefined ? 0 : u.attack.pctPen + (skill.pctPenBonus ?? 0),
-    flatPen: skill.rawDamage !== undefined ? 0 : u.attack.flatPen,
-    ranged: skill.kind === 'shot',
-    damageType: skill.damageType ?? u.attack.damageType,
-  });
+  const tp = expectedStrike(state, u, t, profile);
   const note = skill.kind === 'shove' ? 'Shoves 1 tile; dazes if blocked' : skill.kind === 'hook' ? 'Drags target next to you' : skill.applies === 'dazed' ? 'Dazes on hit' : undefined;
   return { kind: 'skill', anchor, tiles: [anchor], apCost: cost, targets: [tp], ...(note && { note }) };
 }
@@ -271,7 +270,8 @@ export function timelineEntries(state: BattleState): TimelineEntry[] {
     const src = state.units.find((u) => u.id === e.sourceId);
     out.push({ kind: 'effect', id: e.id, label: e.name, side: src?.side ?? 'enemy', at: e.resolveAt - state.clock, active: false });
   }
-  return out.sort((a, b) => a.at - b.at);
+  const scheduled = (e: TimelineEntry) => e.kind === 'unit' ? unitSchedule(state, unitById(state, e.id), e.at) : { kind: 'effect' as const, at: e.at, side: 0, order: state.effects.findIndex(x => x.id === e.id) };
+  return out.sort((a, b) => Number(b.active) - Number(a.active) || schedulerCompare(state.config, scheduled(a), scheduled(b)));
 }
 
 /** Where the active unit's next turn would land after spending `extra` more AP. */
@@ -279,7 +279,7 @@ export function projectedNextTurn(state: BattleState, extra: number): number {
   const a = state.active;
   if (!a) return 0;
   const spent = a.moveSpent + a.actionSpent + a.reactionSpent + extra;
-  return Math.max(spent, state.config.minTurnDelay);
+  return a.startedAt - state.clock + turnDelay(state, unitById(state, a.unitId), spent);
 }
 
 export interface Danger {
@@ -287,28 +287,62 @@ export interface Danger {
   impactIn: number;
   margin: number; // impactIn − projected next turn (>0: you act first)
   safe: boolean;
+  outlook: EscapeOutlook;
 }
 
-/** Delayed effects that cover `tile` and land before the active unit's projected next turn. */
+export interface EscapeOutlook {
+  eligible: boolean;
+  inside: boolean;
+  actsBefore: boolean;
+  reachableSafe: boolean;
+  disengageRisk: number;
+  canEscape: boolean;
+}
+/** Movement is instantaneous within a turn; never subtract walking AP from impact time.
+ * This predicts the next turn on the current board, not intervening AI moves or RNG.
+ */
+export function escapeOutlook(state: BattleState, u: UnitState, effect: Pick<DelayedEffect, 'sourceId' | 'resolveAt' | 'tiles'>, opts: { from?: Vec; nextAt?: number } = {}): EscapeOutlook {
+  const board = hypotheticalBoard(state, u, opts.from ?? u.pos);
+  const moved = unitById(board, u.id);
+  const eligible = effectCanHit(board, effect, moved);
+  const inside = tilesOf(moved).some(t => effect.tiles.some(x => eq(x, t)));
+  const nextAt = opts.nextAt ?? (state.active?.unitId === u.id ? state.clock + projectedNextTurn(state, 0) : u.nextTurnAt);
+  const actsBefore = unitActsBefore(state, u, nextAt, { kind: 'effect', at: effect.resolveAt });
+  // Next turn restores the full movement budget and disengage checks.
+  const future = { ...board, active: null };
+  let bestSafety = -1;
+  for (const r of reachable(future, u.id).values()) {
+    const pos = r.path.at(-1)!;
+    if (tilesOf({ ...moved, pos }).some(t => effect.tiles.some(x => eq(x, t)))) continue;
+    bestSafety = Math.max(bestSafety, pathSafety(r));
+  }
+  const reachableSafe = bestSafety >= 0;
+  return { eligible, inside, actsBefore, reachableSafe, disengageRisk: reachableSafe ? 1 - bestSafety : 0, canEscape: !eligible || !inside || (actsBefore && reachableSafe) };
+}
+
+/** Eligible delayed effects covering the projected position, with geometric escape outlook. */
 export function dangerAt(state: BattleState, tile: Vec, projectedDelay: number): Danger[] {
+  const u = state.active ? unitById(state, state.active.unitId) : null;
+  if (!u) return [];
   const out: Danger[] = [];
   for (const e of state.effects) {
-    if (!e.tiles.some((t) => eq(t, tile))) continue;
+    if (!effectCanHit(state, e, u)) continue;
+    const moved = { ...u, pos: tile };
+    if (!tilesOf(moved).some(t => e.tiles.some(x => eq(x, t)))) continue;
     const impactIn = e.resolveAt - state.clock;
-    const margin = impactIn - projectedDelay;
-    const safe = margin > 1e-9 || (Math.abs(margin) <= 1e-9 && state.config.tieUnitBeforeEffect);
-    out.push({ effect: e, impactIn, margin, safe });
+    const outlook = escapeOutlook(state, u, e, { from: tile, nextAt: state.clock + projectedDelay });
+    out.push({ effect: e, impactIn, margin: impactIn - projectedDelay, safe: outlook.canEscape, outlook });
   }
   return out;
 }
 
 /** The boss's next sweep, if it acts before the given time: tiles it would cover and when it would land. */
-export function bossSweepThreat(state: BattleState): { tiles: Vec[]; bossActsIn: number; landsIn: number } | null {
+export function bossSweepThreat(state: BattleState): { bossId: string; tiles: Vec[]; bossActsIn: number; landsIn: number } | null {
   const boss = state.units.find((u) => u.ai === 'nephilim' && alive(u));
   if (!boss || !state.boss) return null;
   const tiles = sweepTiles(state);
   const bossActsIn = boss.nextTurnAt - state.clock;
-  return { tiles, bossActsIn, landsIn: bossActsIn + state.config.sweepDelay };
+  return { bossId: boss.id, tiles, bossActsIn, landsIn: bossActsIn + resolveSkill(state, boss, SKILLS.nephilim_sweep!).delay };
 }
 
 export function engagedPairs(state: BattleState): [string, string][] {

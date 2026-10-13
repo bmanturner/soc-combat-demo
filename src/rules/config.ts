@@ -7,6 +7,7 @@ export interface RulesConfig {
   // Timeline
   movementBudget: number;
   minTurnDelay: number;
+  autoEndTurn: boolean;
   tieUnitBeforeEffect: boolean;
   tiePlayerFirst: boolean;
   // Movement
@@ -67,6 +68,7 @@ export interface RulesConfig {
 export const DEFAULT_CONFIG: RulesConfig = {
   movementBudget: 50,
   minTurnDelay: 25,
+  autoEndTurn: true,
   tieUnitBeforeEffect: true,
   tiePlayerFirst: true,
   moveApClothing: 10,
@@ -131,7 +133,8 @@ export type SettingDef =
 export const SETTINGS: SettingDef[] = [
   // Timeline
   { key: 'movementBudget', label: 'Movement AP per turn', group: 'Timeline', type: 'number', min: 20, max: 100, step: 5, unit: 'AP', status: 'source', why: 'Aaron: movement turns cap at 50 AP → 5/4/3 tiles for light/medium/heavy.' },
-  { key: 'minTurnDelay', label: 'Minimum turn delay (Wait)', group: 'Timeline', type: 'number', min: 0, max: 100, step: 5, unit: 'AP', status: 'demo', why: 'Undefined. Ending a turn having spent nothing still costs 25 AP so "Wait" is a real choice: you slip just behind the next enemy instead of looping forever.' },
+  { key: 'autoEndTurn', label: 'Auto-end exhausted turns', group: 'Timeline', type: 'boolean', status: 'demo', why: 'After acting, end automatically when movement is locked or less than one tile remains. Toggle off for manual timing experiments.' },
+  { key: 'minTurnDelay', label: 'Wait (empty turn) costs', group: 'Timeline', type: 'number', min: 5, max: 100, step: 5, unit: 'AP', status: 'demo', why: 'Empty turns cost 25 AP by default to prevent zero-time loops; nonempty turns cost AP actually spent. The minimum configurable wait is 5 AP.' },
   { key: 'tieUnitBeforeEffect', label: 'Ties: units act before effects land', group: 'Timeline', type: 'boolean', status: 'demo', why: 'Undefined. Units first makes a 0 AP escape margin survivable ("exact timing"), matching the Tentative Math reading.' },
   { key: 'tiePlayerFirst', label: 'Ties: party acts before enemies', group: 'Timeline', type: 'boolean', status: 'demo', why: 'Undefined. Predictable and slightly player-favoured.' },
   // Movement
