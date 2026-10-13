@@ -1,0 +1,9 @@
+
+ RUN  v5.0.4 /home/needz/Dev/personal/soc-fix/balance2
+
+
+ Test Files  17 passed (17)
+      Tests  203 passed (203)
+   Start at  12:19:16
+   Duration  12.44s (tests 92%, transform 4%, import 3%)
+
