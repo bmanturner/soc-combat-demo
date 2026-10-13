@@ -1,0 +1,8 @@
+{"policy":"expert","encounter":"granary","seeds":40,"mix":{"Throwing Knife":40,"Bite":134,"Dagger strike":121},"fear":0,"moves":183,"archerMoves":0,"disengages":2}
+{"policy":"expert","encounter":"wolves","seeds":40,"mix":{"Bite":267,"Dagger strike":179,"Club swing":84,"Throwing Knife":48,"Heavy Daze":38},"fear":120,"moves":579,"archerMoves":0,"disengages":98}
+{"policy":"expert","encounter":"cultists","seeds":40,"mix":{"Dagger strike":316,"Heavy Daze":83,"Ritual blade":370,"Daze Bolt":93,"Club swing":73,"Throwing Knife":48,"Hellfire Sigil":43},"fear":0,"moves":514,"archerMoves":0,"disengages":133}
+{"policy":"expert","encounter":"nephilim","seeds":40,"mix":{"Throwing Knife":115,"Aimed Shot":171,"Sweeping Arm":281,"Heavy Daze":125,"Arrow":251,"Dagger strike":403,"Club swing":117,"Rockfall":91,"Rock Throw":37},"fear":0,"moves":1047,"archerMoves":177,"disengages":0}
+{"policy":"novice","encounter":"granary","seeds":40,"mix":{"Throwing Knife":40,"Bite":111,"Dagger strike":115},"fear":0,"moves":190,"archerMoves":0,"disengages":0}
+{"policy":"novice","encounter":"wolves","seeds":40,"mix":{"Bite":282,"Dagger strike":193,"Club swing":81,"Throwing Knife":23,"Heavy Daze":24},"fear":120,"moves":513,"archerMoves":0,"disengages":75}
+{"policy":"novice","encounter":"cultists","seeds":40,"mix":{"Dagger strike":356,"Heavy Daze":77,"Ritual blade":349,"Daze Bolt":111,"Club swing":75,"Throwing Knife":29,"Hellfire Sigil":53},"fear":0,"moves":567,"archerMoves":0,"disengages":137}
+{"policy":"novice","encounter":"nephilim","seeds":40,"mix":{"Throwing Knife":73,"Aimed Shot":163,"Sweeping Arm":248,"Heavy Daze":40,"Arrow":274,"Dagger strike":388,"Club swing":40,"Rockfall":40,"Rock Throw":141},"fear":0,"moves":555,"archerMoves":40,"disengages":0}

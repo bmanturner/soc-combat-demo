@@ -60,6 +60,8 @@ export interface RulesConfig {
   playerDamageMult: number;
   enemyDamageMult: number;
   enemyHpMult: number;
+  sweepStreakCap: number;
+  rockThrowFallback: 'ranged-only' | 'any-exposed';
 }
 
 export const DEFAULT_CONFIG: RulesConfig = {
@@ -110,6 +112,8 @@ export const DEFAULT_CONFIG: RulesConfig = {
   playerDamageMult: 1,
   enemyDamageMult: 1,
   enemyHpMult: 1,
+  sweepStreakCap: 2,
+  rockThrowFallback: 'any-exposed',
 };
 
 interface BaseSetting {
@@ -181,6 +185,8 @@ export const SETTINGS: SettingDef[] = [
   { key: 'playerDamageMult', label: 'Party damage multiplier', group: 'Encounters', type: 'number', min: 0.25, max: 3, step: 0.05, unit: 'x', status: 'demo', why: 'Global difficulty knob.' },
   { key: 'enemyDamageMult', label: 'Enemy damage multiplier', group: 'Encounters', type: 'number', min: 0.25, max: 3, step: 0.05, unit: 'x', status: 'demo', why: 'Global difficulty knob.' },
   { key: 'enemyHpMult', label: 'Enemy HP multiplier', group: 'Encounters', type: 'number', min: 0.25, max: 3, step: 0.05, unit: 'x', status: 'demo', why: 'Global difficulty knob.' },
+  { key: 'sweepStreakCap', label: 'Sweeps before exposed ranged pressure', group: 'Nephilim', type: 'number', min: 1, max: 10, step: 1, unit: 'turns', status: 'demo', why: 'Bounds sweep bait: after this many consecutive sweeps an exposed ranged foe gets a rock instead.' },
+  { key: 'rockThrowFallback', label: 'Rock throw fallback targets', group: 'Nephilim', type: 'select', options: [{ value: 'ranged-only', label: 'Ranged only' }, { value: 'any-exposed', label: 'Any exposed foe' }], status: 'demo', why: 'Prefer ranged pressure; optionally throw at exposed melee when no ranged target is visible.' },
 ];
 
 /** Validate and clamp untrusted overrides (from a shared URL) against the registry. */
