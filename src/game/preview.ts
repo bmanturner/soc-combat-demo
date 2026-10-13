@@ -2,8 +2,9 @@
 
 import { SKILLS } from '../content/gear';
 import { eq, key, type Vec } from '../rules/geometry';
-import { bossSweepThreat, dangerAt, previewAttack, previewSkill, projectedNextTurn, reachable } from '../rules/queries';
+import { bossSweepThreat, dangerAt, escapeOutlook, previewAttack, previewSkill, projectedNextTurn, reachable } from '../rules/queries';
 import { unitById } from '../rules/state';
+import { unitActsBefore } from '../rules/resolvers';
 import type { BattleState, UnitState } from '../rules/types';
 import type { GameStore } from './store';
 
@@ -24,11 +25,19 @@ export function activePlayer(b: BattleState | null): UnitState | null {
 
 /** Classify the danger of ending a turn on `tile` with a next turn `projected` AP from now. */
 export function judge(b: BattleState, tile: Vec, projected: number): { danger: Pending['danger']; text: string } {
-  const hits = dangerAt(b, tile, projected).filter((d) => !d.safe);
-  if (hits.length) return { danger: 'hit', text: `${hits[0]!.effect.name} lands ${Math.round(hits[0]!.impactIn)} AP from now, before your turn at ${Math.round(projected)}.` };
+  const dangers = dangerAt(b, tile, projected);
+  const hit = dangers.find(d => !d.safe);
+  if (hit) return { danger: 'hit', text: !hit.outlook.actsBefore ? `${hit.effect.name} lands in ${Math.round(hit.impactIn)} AP, before your next turn.` : `${hit.effect.name}: no safe tile is reachable within your movement budget.` };
+  const risky = dangers.find(d => d.outlook.disengageRisk > 0);
+  if (risky) return { danger: 'risk', text: `${risky.effect.name}: escape requires disengaging (${Math.round(risky.outlook.disengageRisk * 100)}% held risk).` };
   const t = bossSweepThreat(b);
-  if (t && t.tiles.some((p) => eq(p, tile)) && t.bossActsIn < projected && t.landsIn <= projected) {
-    return { danger: 'risk', text: `The Nephilim acts in ${Math.round(t.bossActsIn)} AP. If you're in the zone then, his sweep lands at ${Math.round(t.landsIn)}, before your turn at ${Math.round(projected)}.` };
+  const u = b.active ? unitById(b, b.active.unitId) : null;
+  if (t && u) {
+    const boss = unitById(b, t.bossId);
+    const nextAt = b.clock + projected;
+    const beforeBoss = unitActsBefore(b, u, nextAt, { kind: 'unit', unit: boss, at: boss.nextTurnAt });
+    const outlook = escapeOutlook(b, u, { sourceId: boss.id, tiles: t.tiles, resolveAt: b.clock + t.landsIn }, { from: tile, nextAt });
+    if (!beforeBoss && outlook.eligible && outlook.inside && (!outlook.canEscape || outlook.disengageRisk > 0)) return { danger: 'risk', text: `Possible sweep in ${Math.round(t.landsIn)} AP: ${!outlook.canEscape ? 'no escape before impact' : 'escape requires disengaging'}.` };
   }
   return { danger: 'none', text: '' };
 }

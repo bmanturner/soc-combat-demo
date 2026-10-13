@@ -4,10 +4,11 @@ import Phaser from 'phaser';
 import { SKILLS } from '../content/gear';
 import { breakFreeAt } from '../rules/engine';
 import { eq, key, type Vec } from '../rules/geometry';
-import { attackOptions, bossSweepThreat, dangerAt, engagedPairs, pathSafety, previewAttack, previewSkill, projectedNextTurn, reachable, skillOptions, type AttackPreview } from '../rules/queries';
+import { attackOptions, bossSweepThreat, engagedPairs, pathSafety, previewAttack, previewSkill, reachable, skillOptions, type AttackPreview } from '../rules/queries';
 import { alive, isFlanked, tilesOf, unitById } from '../rules/state';
 import type { BattleState, GameEvent, UnitState } from '../rules/types';
 import { controller, registerAnimator, unregisterAnimator, type Animator } from '../game/controller';
+import { pendingFor } from '../game/preview';
 import { store, type GameStore } from '../game/store';
 import { COLORS, hex } from './palette';
 
@@ -372,12 +373,10 @@ export class BoardScene extends Phaser.Scene implements Animator {
           const p = r.path[risk.index]!;
           this.label(this.cx(p.x), this.cy(p.y) - this.tile * 0.3, `held ${Math.round(risk.chance * 100)}%`, '#ffcf66', 0.18);
         }
-        const delay = projectedNextTurn(b, r.cost);
-        const danger = dangerAt(b, hov, delay).filter((d) => !d.safe);
-        const sweepRisk = threat && threat.bossActsIn < delay && threat.landsIn <= delay && threat.tiles.some((t) => eq(t, hov));
-        const color = danger.length ? '#ff6b5b' : sweepRisk ? '#ffb347' : '#ffffff';
-        const note = danger.length ? ' ⚠ hit before you act' : sweepRisk ? ' ⚠ sweep risk' : '';
-        this.label(this.cx(hov.x), this.cy(hov.y) + this.tile * 0.05, `${r.cost} AP${note}`, color, 0.2);
+        const pending = pendingFor({ battle: b, hoverTile: hov, mode: { kind: 'move' }, busy: false });
+        const color = pending?.danger === 'hit' ? '#ff6b5b' : pending?.danger === 'risk' ? '#ffb347' : '#ffffff';
+        const note = pending?.danger === 'hit' ? ' ⚠ no escape' : pending?.danger === 'risk' ? ' ⚠ escape risk' : '';
+        this.label(this.cx(hov.x), this.cy(hov.y) + this.tile * 0.05, `${pending?.extra ?? r.cost} AP${note}`, color, 0.2);
       } else if (hov && !a.acted) {
         const p = previewAttack(b, u, hov);
         if (p) this.drawAttackPreview(p);

@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { breakFreeAt } from '../rules/engine';
 import { eq } from '../rules/geometry';
-import { bossSweepThreat, projectedNextTurn } from '../rules/queries';
+import { bossSweepThreat, escapeOutlook, projectedNextTurn } from '../rules/queries';
+import { effectCanHit, unitActsBefore } from '../rules/resolvers';
 import { alive, tilesOf } from '../rules/state';
 import { controller } from '../game/controller';
 import { useGame } from './hooks';
@@ -15,7 +16,7 @@ export function IncomingPanel() {
   const bf = breakFreeAt(battle);
   const items = battle.effects.map((e) => {
     const impactIn = e.resolveAt - battle.clock;
-    const inside = battle.units.filter((u) => alive(u) && tilesOf(u).some((t) => e.tiles.some((x) => eq(x, t))));
+    const inside = battle.units.filter((u) => effectCanHit(battle, e, u) && tilesOf(u).some((t) => e.tiles.some((x) => eq(x, t))));
     return { e, impactIn, inside };
   });
   return (
@@ -31,11 +32,12 @@ export function IncomingPanel() {
           {inside.map((u) => {
             const isActive = battle.active?.unitId === u.id;
             const nextIn = isActive ? projectedNextTurn(battle, 0) : u.nextTurnAt - battle.clock;
-            const acts = nextIn < impactIn || (nextIn === impactIn && battle.config.tieUnitBeforeEffect);
+            const outlook = escapeOutlook(battle, u, e);
+            const acts = outlook.canEscape;
             const who = isActive ? `${u.name} (if you stop here, next turn in ${Math.round(nextIn)})` : `${u.name} acts in ${Math.round(nextIn)}`;
             return (
               <div key={u.id} className={`inc-unit ${acts ? 'ok' : 'caught'}`} onMouseEnter={() => controller.hoverUnit(u.id)} onMouseLeave={() => controller.hoverUnit(null)}>
-                {who}: {acts ? `can still escape (+${Math.round(impactIn - nextIn)})` : `CAUGHT (${Math.round(impactIn - nextIn)})`}
+                {who}: {acts ? outlook.disengageRisk > 0 ? `escape requires disengaging (${Math.round(outlook.disengageRisk * 100)}% held risk)` : `can still escape (+${Math.round(impactIn - nextIn)})` : `CAUGHT (${outlook.actsBefore ? 'no reachable safe tile' : 'impact before next turn'})`}
               </div>
             );
           })}
@@ -54,11 +56,14 @@ export function IncomingPanel() {
             const nextIn = isActive ? projectedNextTurn(battle, 0) : u.nextTurnAt - battle.clock;
             const inZone = threat.tiles.some((t) => eq(t, u.pos));
             if (!inZone) return null;
-            const beforeBoss = nextIn < threat.bossActsIn || (nextIn === threat.bossActsIn && battle.config.tiePlayerFirst);
-            const ok = beforeBoss || nextIn < threat.landsIn || (nextIn === threat.landsIn && battle.config.tieUnitBeforeEffect);
+            const boss = battle.units.find(x => x.id === threat.bossId)!;
+            const nextAt = battle.clock + nextIn;
+            const beforeBoss = unitActsBefore(battle, u, nextAt, { kind: 'unit', unit: boss, at: boss.nextTurnAt });
+            const outlook = escapeOutlook(battle, u, { sourceId: boss.id, tiles: threat.tiles, resolveAt: battle.clock + threat.landsIn }, { nextAt });
+            const ok = beforeBoss || outlook.canEscape;
             return (
               <div key={u.id} className={`inc-unit ${ok ? 'ok' : 'caught'}`}>
-                {u.name} in the zone, {isActive ? 'next turn if you stop now' : 'acts'} in {Math.round(nextIn)}: {beforeBoss ? 'acts before he does' : ok ? 'can get out before it lands' : 'WOULD BE CAUGHT'}
+                {u.name} in the zone, {isActive ? 'next turn if you stop now' : 'acts'} in {Math.round(nextIn)}: {beforeBoss ? 'acts before he does' : ok ? outlook.disengageRisk > 0 ? 'escape requires disengaging' : 'can get out before it lands' : 'WOULD BE CAUGHT'}
               </div>
             );
           })}

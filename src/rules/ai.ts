@@ -2,9 +2,9 @@
 // action for the active unit; callers loop until it returns endTurn. Pure: reads state, never mutates it.
 
 import { SKILLS } from '../content/gear';
-import { damageAfterDefense } from './formulas';
+import { actionApCost, delayedDamage, effectCanHit, hypotheticalBoard, resolveSkill, turnDelay, unitActsBefore } from './resolvers';
 import { DIRS8, add, cheb, eq, key, type Vec } from './geometry';
-import { attackOptions, previewSkill, reachable, pathSafety, skillOptions, type AttackPreview, type Reach } from './queries';
+import { attackOptions, escapeOutlook, previewSkill, reachable, pathSafety, skillOptions, type AttackPreview, type Reach } from './queries';
 import { alive, distToUnit, lineOfSight, occupant, skillReady, tilesOf, unitById, walkable } from './state';
 import { skillTargeting, sweepTiles } from './targeting';
 import type { Action, BattleState, UnitState } from './types';
@@ -61,25 +61,26 @@ function nearestEnemy(state: BattleState, u: UnitState): UnitState | null {
 function projected(state: BattleState, extra: number, u: UnitState): number {
   const a = state.active!;
   const spent = a.moveSpent + a.actionSpent + a.reactionSpent + extra;
-  return Math.max(spent, u.massive ? state.config.bossTurnAp : state.config.minTurnDelay);
+  return turnDelay(state, u, spent);
 }
 
 /** True if standing on `tile` until our next turn (in `delay` AP) gets us hit by a known or predictable effect. */
 export function tileDanger(state: BattleState, u: UnitState, tile: Vec, delay: number, anticipateBoss: boolean): number {
-  const cfg = state.config;
-  const lands = (at: number) => at < delay - 1e-9 || (Math.abs(at - delay) <= 1e-9 && !cfg.tieUnitBeforeEffect);
+  const board = hypotheticalBoard(state, u, tile);
+  const mover = unitById(board, u.id);
+  const nextAt = state.clock + delay;
   let danger = 0;
-  for (const e of state.effects) {
-    if (!e.tiles.some((t) => eq(t, tile))) continue;
-    const src = state.units.find((x) => x.id === e.sourceId);
-    if (src && src.side === u.side && !cfg.delayedHitsAllies) continue;
-    if (lands(e.resolveAt - state.clock)) danger += e.damage;
-  }
+  const risk = (e: { sourceId: string; tiles: Vec[]; resolveAt: number; damage: number; damageType: 'physical' | 'magic'; pctPen: number }) => {
+    if (!effectCanHit(board, e, mover) || !tilesOf(mover).some(t => e.tiles.some(x => eq(x, t)))) return 0;
+    const outlook = escapeOutlook(board, mover, e, { nextAt });
+    return delayedDamage(board, e, mover) * (outlook.canEscape ? outlook.disengageRisk : 1);
+  };
+  for (const e of state.effects) danger += risk(e);
   if (anticipateBoss && state.boss) {
     const boss = state.units.find((x) => x.ai === 'nephilim' && alive(x));
-    if (boss && boss.side !== u.side && sweepTiles(state).some((t) => eq(t, tile))) {
-      const actsIn = boss.nextTurnAt - state.clock;
-      if (actsIn < delay && lands(actsIn + cfg.sweepDelay)) danger += cfg.sweepDamage;
+    if (boss && boss.side !== u.side && !unitActsBefore(state, u, nextAt, { kind: 'unit', unit: boss, at: boss.nextTurnAt })) {
+      const { profile, delay: impactDelay } = resolveSkill(state, boss, SKILLS.nephilim_sweep!);
+      danger += risk({ sourceId: boss.id, tiles: sweepTiles(state), resolveAt: boss.nextTurnAt + impactDelay, ...profile });
     }
   }
   return danger;
@@ -249,17 +250,12 @@ function casterAction(state: BattleState, u: UnitState): Action {
           if (!tg.valid || !tg.area) continue;
           let foesHit = 0;
           let allyRisk = 0;
-          for (const t of tg.area) {
-            const o = occupant(state, t);
-            if (!o) continue;
+          const preview = previewSkill(state, u, 'hellfire_sigil', p)!;
+          const raw = resolveSkill(state, u, SKILLS.hellfire_sigil!).profile.damage;
+          for (const t of preview.targets) {
+            const o = unitById(state, t.unitId);
             if (o.side !== u.side) foesHit += 1;
-            else if (state.config.delayedHitsAllies) {
-              // AI-local estimate until shared delayed-damage previews land. Do not forbid
-              // self-overlap: the caster can be baited into a profitable but dangerous sigil.
-              const raw = SKILLS.hellfire_sigil!.rawDamage! * state.config.enemyDamageMult;
-              const damage = damageAfterDefense(raw, o.mr, 0, 0);
-              allyRisk += 2 * damage / Math.max(1, raw) + (damage >= o.hp ? 4 : 0);
-            }
+            else allyRisk += 2 * t.damageIfLands / Math.max(1, raw) + (t.kills ? 4 : 0);
           }
           const score = foesHit * 3 - allyRisk - (eq(p, u.pos) ? 10 : 0);
           if (foesHit >= 1 && (!best || score > best.score)) best = { at: p, score };
@@ -375,10 +371,9 @@ export function enemyAction(state: BattleState): Action {
 
 // ---------------- Player bot (headless sims, "auto" button) ----------------
 
-/** AI-local until the shared hypothetical-action cost query lands. Includes move-after-fire. */
+/** Compatibility wrapper; all AP policy lives in the shared resolver. */
 export function plannedActionAp(state: BattleState, u: UnitState, skillId: string | null, willMove: boolean): number {
-  const profile = skillId ? SKILLS[skillId]! : u.attack;
-  return profile.apCost + (profile.stationaryDiscount && (state.active?.moved || willMove) ? state.config.bowMoveSurcharge : 0);
+  return actionApCost(state, u, skillId ? SKILLS[skillId]! : u.attack, willMove);
 }
 
 /** Expected failed-disengage damage plus danger at the tile where movement is stopped. */
@@ -420,7 +415,15 @@ export function botAction(state: BattleState, policy: PartyPolicy = 'expert'): A
   const foes = state.units.filter((x) => alive(x) && x.side !== u.side);
   if (foes.length === 0) return END(u);
   const focus = policy === 'novice' ? nearestEnemy(state, u)! : foes.reduce((b, f) => (f.hp < b.hp ? f : b));
-  const danger = (p: Vec, delay: number) => tileDanger(state, u, p, delay, policy === 'expert') + (policy === 'expert' && u.attack.ranged ? exposureToBoss(state, u, p, delay) : 0);
+  const dangerCache = new Map<string, number>();
+  const danger = (p: Vec, delay: number) => {
+    const k = `${key(p)}:${delay}`;
+    const cached = dangerCache.get(k);
+    if (cached !== undefined) return cached;
+    const value = tileDanger(state, u, p, delay, policy === 'expert') + (policy === 'expert' && u.attack.ranged ? exposureToBoss(state, u, p, delay) : 0);
+    dangerCache.set(k, value);
+    return value;
+  };
   const spentNow = a.moveSpent + a.actionSpent + a.reactionSpent;
   const budget = state.config.movementBudget;
 
@@ -452,7 +455,7 @@ export function botAction(state: BattleState, policy: PartyPolicy = 'expert'): A
         const q = rr.path[rr.path.length - 1]!;
         if (!eq(q, p) && occupant(state, q) && occupant(state, q)!.id !== u.id) continue;
         const cost = plannedActionAp(state, u, o.skillId, r.cost + rr.cost > 0);
-        const delay = Math.max(spentNow + r.cost + cost + rr.cost, state.config.minTurnDelay);
+        const delay = turnDelay(state, u, spentNow + r.cost + cost + rr.cost);
         const risk = pathFailureCost(state, rr, (tile) => danger(tile, delay));
         const approachRisk = pathFailureCost(state, r, (tile) => danger(tile, delay));
         const expectedDanger = danger(q, delay) * pathSafety(rr) + risk + approachRisk;

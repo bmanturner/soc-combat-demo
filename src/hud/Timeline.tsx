@@ -40,7 +40,7 @@ export function Timeline() {
         {ghost && (
           <span className={`tl-ghost-text ${ghost.danger}`} data-testid="ghost-text">
             {ghost.what}: next turn in <b>{Math.round(ghost.projected)}</b> AP
-            {ghost.danger === 'hit' ? ' ⚠ you get hit first' : ghost.danger === 'risk' ? ' ⚠ sweep risk' : ''}
+            {ghost.danger === 'hit' ? ' ⚠ no escape' : ghost.danger === 'risk' ? ' ⚠ escape risk' : ''}
           </span>
         )}
       </div>
