@@ -111,6 +111,12 @@ describe('Movement', () => {
     const heavy = testBattle({ rows: OPEN_7x7, jubal: { x: 3, y: 3 }, armor: 'heavy', enemies: [{ template: 'small_rat', at: { x: 0, y: 0 }, initiative: 999 }] });
     expect(reachable(heavy, 'jubal').size - 1).toBe(24);
   });
+  it('units walk through allies but never stop on them', () => {
+    let s = testBattle({ rows: OPEN_7x7, jubal: { x: 3, y: 6 }, allies: [{ template: 'jabal', at: { x: 3, y: 5 }, id: 'jabal', initiative: 999 }], enemies: [{ template: 'small_rat', at: { x: 0, y: 0 }, initiative: 999 }] });
+    s = play(s, [{ type: 'move', unitId: 'jubal', to: { x: 3, y: 2 } }]).state;
+    expect(unitById(s, 'jubal').pos).toEqual({ x: 3, y: 2 });
+    expect(reachable(s, 'jubal').has('3,5')).toBe(false);
+  });
   it('move, act, move: movement budget is shared across the turn', () => {
     let s = testBattle({ rows: OPEN_7x7, jubal: { x: 0, y: 3 }, armor: 'light', enemies: [{ template: 'small_rat', at: { x: 3, y: 3 }, initiative: 999 }] });
     s = play(s, [{ type: 'move', unitId: 'jubal', to: { x: 2, y: 3 } }, { type: 'attack', unitId: 'jubal', target: { x: 3, y: 3 } }]).state;

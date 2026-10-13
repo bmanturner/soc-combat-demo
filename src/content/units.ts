@@ -23,7 +23,7 @@ export const UNITS: Record<string, UnitTemplate> = {
   cultist_fighter: { id: 'cultist_fighter', name: 'Cultist Zealot', glyph: 'Z', side: 'enemy', role: 'Shield wall for the caster', hp: 130, armorClass: 'light', armor: 75, mr: 30, dodge: 0.08, weapon: 'cultist_blade', ai: 'guardian', initiative: 35 },
   cultist_mage: { id: 'cultist_mage', name: 'Cultist Seer', glyph: 'S', side: 'enemy', role: 'Dazes, brands the ground with fire', hp: 90, armorClass: 'light', armor: 25, mr: 60, dodge: 0.1, weapon: 'cultist_staff', skills: ['daze_bolt', 'hellfire_sigil'], ai: 'caster', initiative: 45 },
   nephilim: {
-    id: 'nephilim', name: 'Trapped Nephilim', glyph: 'N', side: 'enemy', role: 'Pinned under the cave-in. One arm free.', hp: 1000, armorClass: 'heavy', armor: 100, mr: 100, dodge: 0, weapon: 'nephilim_arm', skills: ['nephilim_sweep', 'rock_throw', 'rockfall'], ai: 'nephilim',
+    id: 'nephilim', name: 'Trapped Nephilim', glyph: 'N', side: 'enemy', role: 'Pinned under the cave-in. One arm free.', hp: 1200, armorClass: 'heavy', armor: 100, mr: 100, dodge: 0, weapon: 'nephilim_arm', skills: ['nephilim_sweep', 'rock_throw', 'rockfall'], ai: 'nephilim',
     footprint: [{ x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 }, { x: -1, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 0 }],
     immobile: true, massive: true, initiative: 40,
   },

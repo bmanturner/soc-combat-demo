@@ -12,6 +12,7 @@ import {
   engagersLeft,
   enemiesOf,
   isFlanked,
+  lineOfSight,
   occupant,
   round3,
   skillReady,
@@ -182,11 +183,18 @@ export function advance(state: BattleState, events: GameEvent[]): void {
       ...state.units.filter(alive).map((u) => ({ kind: 'unit' as const, at: u.nextTurnAt, side: (u.side === 'player') === cfg.tiePlayerFirst ? 0 : 1, order: u.order, id: u.id })),
       ...state.effects.map((e, i) => ({ kind: 'effect' as const, at: e.resolveAt, side: 0, order: i, id: e.id })),
     ];
+    const breakFree = breakFreeAt(state);
+    if (breakFree !== null) cands.push({ kind: 'effect', at: breakFree, side: 0, order: 9999, id: '__breakfree' });
     if (cands.length === 0) return;
     const kindRank = (k: Cand['kind']) => ((k === 'unit') === cfg.tieUnitBeforeEffect ? 0 : 1);
     cands.sort((a, b) => a.at - b.at || kindRank(a.kind) - kindRank(b.kind) || a.side - b.side || a.order - b.order);
     const next = cands[0]!;
     state.clock = Math.max(state.clock, round3(next.at));
+    if (next.id === '__breakfree') {
+      state.outcome = 'defeat';
+      events.push({ t: 'info', text: 'The Nephilim tears free of the rubble. You were too slow.' }, { t: 'outcome', outcome: 'defeat' });
+      return;
+    }
     if (next.kind === 'effect') {
       const eff = state.effects.find((e) => e.id === next.id)!;
       state.effects = state.effects.filter((e) => e.id !== next.id);
@@ -208,10 +216,27 @@ export function advance(state: BattleState, events: GameEvent[]): void {
       surchargePending: false,
       surchargePaid: false,
     };
+    if (u.ai === 'nephilim') trackHiding(state, u);
     events.push({ t: 'turnStart', unitId: u.id, clock: state.clock });
     return;
   }
   throw new Error('timeline did not converge');
+}
+
+/** When the trapped boss tears free (a loss), or null if there's no such clock. */
+export function breakFreeAt(state: BattleState): number | null {
+  if (state.config.bossBreakFreeAt <= 0) return null;
+  return state.units.some((u) => u.ai === 'nephilim' && alive(u)) ? state.config.bossBreakFreeAt : null;
+}
+
+/** The Nephilim remembers ranged units that keep hiding from him behind cover. */
+function trackHiding(state: BattleState, boss: UnitState): void {
+  const eye = state.boss?.eye ?? boss.pos;
+  for (const p of state.units) {
+    if (!alive(p) || p.side === boss.side || !p.attack.ranged) continue;
+    const k = `hidden:${p.id}`;
+    state.memory[k] = lineOfSight(state, eye, p.pos) ? 0 : (state.memory[k] ?? 0) + 1;
+  }
 }
 
 export function turnSpent(state: BattleState): number {
@@ -224,7 +249,8 @@ function endTurn(state: BattleState, unit: UnitState, events: GameEvent[]): void
   const a = state.active;
   if (!a || a.unitId !== unit.id) return;
   const spent = turnSpent(state);
-  const delay = Math.max(spent, state.config.minTurnDelay);
+  // Bosses keep a steady rhythm: even a turn spent watching costs a full boss turn.
+  const delay = Math.max(spent, unit.massive ? state.config.bossTurnAp : state.config.minTurnDelay);
   unit.nextTurnAt = round3(a.startedAt + delay);
   const tel = state.telemetry[unit.id];
   if (tel) {
@@ -293,7 +319,11 @@ function doMove(state: BattleState, unit: UnitState, to: Vec, events: GameEvent[
     }
     if (unit.ko) break;
     // The unit may have been displaced by a dodge; only step if still adjacent to the planned step.
-    if (cheb(unit.pos, step) !== 1 || occupant(state, step)) {
+    // Allies can be passed through but not stood on: a unit held mid-path can't stop on an ally's tile.
+    const occ = occupant(state, step);
+    const lastStep = i === r.path.length - 1;
+    const blocked = !!occ && occ.id !== unit.id && (occ.side !== unit.side || lastStep || held);
+    if (cheb(unit.pos, step) !== 1 || blocked) {
       a.movementLocked = true;
       break;
     }
@@ -518,6 +548,7 @@ function doSkill(state: BattleState, unit: UnitState, skillId: string, target: V
       const rockfall = skill.special === 'rockfall';
       const dmg = (rockfall ? cfg.rockfallDamage : (skill.rawDamage ?? 0)) * mult;
       const delay = rockfall ? cfg.rockfallDelay : (skill.delay ?? 100);
+      if (rockfall) for (const u of state.units) if (tg.area!.some((t) => eq(t, u.pos))) state.memory[`hidden:${u.id}`] = 0;
       castEffect(state, unit, { name: skill.name, tiles: tg.area!, delay, damage: dmg, damageType: skill.damageType ?? 'magic', pctPen: 0 }, events);
       break;
     }

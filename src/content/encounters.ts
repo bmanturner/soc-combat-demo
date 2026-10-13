@@ -98,9 +98,9 @@ export const ENCOUNTERS: EncounterDef[] = [
     defaultArmor: 'medium',
     allies: [{ template: 'jabal', at: { x: 7, y: 7 }, id: 'jabal' }],
     enemies: [
-      { template: 'cultist_fighter', at: { x: 4, y: 3 }, id: 'zealot1', name: 'Zealot', initiative: 30 },
-      { template: 'cultist_fighter', at: { x: 7, y: 3 }, id: 'zealot2', name: 'Zealot', initiative: 40 },
-      { template: 'cultist_mage', at: { x: 6, y: 1 }, id: 'seer', name: 'Seer', initiative: 20 },
+      { template: 'cultist_fighter', at: { x: 4, y: 3 }, id: 'zealot1', name: 'Left Zealot', initiative: 30 },
+      { template: 'cultist_fighter', at: { x: 7, y: 3 }, id: 'zealot2', name: 'Right Zealot', initiative: 40 },
+      { template: 'cultist_mage', at: { x: 6, y: 1 }, id: 'seer', name: 'Seer', initiative: 50 },
     ],
     targetTurns: '5–8 turns each',
     danger: 'Moderate–high',

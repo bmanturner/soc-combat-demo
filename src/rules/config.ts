@@ -54,6 +54,7 @@ export interface RulesConfig {
   rockfallDelay: number;
   rockfallDamage: number;
   coverCampTurns: number;
+  bossBreakFreeAt: number;
   // Encounter knobs
   wolfPackFear: boolean;
   playerDamageMult: number;
@@ -100,10 +101,11 @@ export const DEFAULT_CONFIG: RulesConfig = {
   sweepDepth: 3,
   sweepDamage: 500,
   sweepArmorPen: 0.5,
-  rockThrowDamage: 110,
+  rockThrowDamage: 130,
   rockfallDelay: 100,
   rockfallDamage: 220,
   coverCampTurns: 2,
+  bossBreakFreeAt: 1800,
   wolfPackFear: true,
   playerDamageMult: 1,
   enemyDamageMult: 1,
@@ -172,6 +174,7 @@ export const SETTINGS: SettingDef[] = [
   { key: 'rockThrowDamage', label: 'Rock throw raw damage', group: 'Nephilim', type: 'number', min: 0, max: 300, step: 10, unit: 'dmg', status: 'demo', why: 'Punishes exposed ranged units without one-shotting them.' },
   { key: 'rockfallDelay', label: 'Rockfall-behind-cover delay', group: 'Nephilim', type: 'number', min: 25, max: 200, step: 5, unit: 'AP', status: 'demo', why: 'Aaron: delayed AoE that flushes cover campers. Delay undefined.' },
   { key: 'rockfallDamage', label: 'Rockfall raw damage', group: 'Nephilim', type: 'number', min: 0, max: 500, step: 10, unit: 'dmg', status: 'demo', why: 'Hurts badly but is survivable once.' },
+  { key: 'bossBreakFreeAt', label: 'Nephilim tears free at (0 = never)', group: 'Nephilim', type: 'number', min: 0, max: 5000, step: 100, unit: 'AP', status: 'demo', why: 'Aaron: kill him "before he can escape, while he is still trapped and vulnerable." A visible clock makes playing too safe a losing strategy: AP discipline, not AP hoarding.' },
   { key: 'coverCampTurns', label: 'Boss turns before flushing cover', group: 'Nephilim', type: 'number', min: 1, max: 5, step: 1, unit: 'turns', status: 'demo', why: 'Boss turns a ranged unit may hide unseen before rockfall targets it.' },
   // Encounter knobs
   { key: 'wolfPackFear', label: 'Wolves scatter when one dies', group: 'Encounters', type: 'boolean', status: 'source', why: "Aaron's possible pack mechanic: survivors flee for a turn, then regroup." },

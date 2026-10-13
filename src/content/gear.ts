@@ -55,7 +55,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   // ---- Monsters
   rat_bite: {
     id: 'rat_bite', name: 'Bite', family: 'natural',
-    attack: { name: 'Bite', pattern: 'cardinal', apCost: 60, damage: 12, hit: 0.75, pctPen: 0, flatPen: 0, ...phys },
+    attack: { name: 'Bite', pattern: 'cardinal', apCost: 80, damage: 10, hit: 0.75, pctPen: 0, flatPen: 0, ...phys },
     canEngage: true, engagement: 1, disengagement: 3, parry: 0, block: 0, dodgeBonus: 0, skills: [], blurb: '',
   },
   wolf_bite: {
@@ -65,7 +65,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   },
   cultist_blade: {
     id: 'cultist_blade', name: 'Ritual Blade & Shield', family: 'shield',
-    attack: { name: 'Ritual blade', pattern: 'pairCw', apCost: 75, damage: 50, hit: 0.82, pctPen: 0, flatPen: 10, ...phys },
+    attack: { name: 'Ritual blade', pattern: 'pairCw', apCost: 75, damage: 45, hit: 0.82, pctPen: 0, flatPen: 10, ...phys },
     canEngage: true, engagement: 5, disengagement: 0, parry: 0.05, block: 0.25, dodgeBonus: 0, skills: [], blurb: '',
   },
   cultist_staff: {
@@ -95,5 +95,5 @@ export const SKILLS: Record<string, SkillDef> = {
   nephilim_sweep: { id: 'nephilim_sweep', name: 'Sweeping Arm', kind: 'sweep', special: 'sweep', apCost: 100, cooldown: 0, damageMult: 1, damageType: 'physical', description: 'Telegraphs a sweep across the whole zone in front of him. Lands after a delay. Lethal.', status: 'source' },
   rock_throw: { id: 'rock_throw', name: 'Rock Throw', kind: 'shot', special: 'rockThrow', apCost: 100, cooldown: 0, range: [2, 12], needsLos: true, damageMult: 1, rawDamage: 110, hitBonus: -0.05, damageType: 'physical', description: 'Hurls debris at an exposed target. Cover blocks it.', status: 'source' },
   rockfall: { id: 'rockfall', name: 'Rockfall', kind: 'sigil', special: 'rockfall', apCost: 100, cooldown: 0, range: [0, 20], radius: 1, damageMult: 1, rawDamage: 220, damageType: 'physical', delay: 100, description: 'Brings the ceiling down behind cover a ranged unit is hiding behind.', status: 'source' },
-  hellfire_sigil: { id: 'hellfire_sigil', name: 'Hellfire Sigil', kind: 'sigil', apCost: 125, cooldown: 350, range: [0, 6], damageMult: 1, rawDamage: 75, damageType: 'magic', delay: 100, radius: 1, description: 'Brands a 3×3 area. Erupts 100 AP later and burns everyone inside, cultists included.', status: 'demo' },
+  hellfire_sigil: { id: 'hellfire_sigil', name: 'Hellfire Sigil', kind: 'sigil', apCost: 125, cooldown: 350, range: [0, 6], damageMult: 1, rawDamage: 65, damageType: 'magic', delay: 100, radius: 1, description: 'Brands a 3×3 area. Erupts 100 AP later and burns everyone inside, cultists included.', status: 'demo' },
 };
