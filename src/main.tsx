@@ -3,12 +3,13 @@ import { createRoot } from 'react-dom/client';
 import { ENCOUNTERS } from './content/encounters';
 import { controller } from './game/controller';
 import { decodeShare } from './game/share';
-import { store } from './game/store';
+import { showToast, store } from './game/store';
 import { App } from './hud/App';
 import './hud/styles.css';
 
 // Restore a shared link: encounter, loadout, seed and rule overrides.
 const shared = decodeShare(location.hash);
+if (shared.invalid) showToast('Invalid share-link values were replaced with defaults.');
 store.setState({
   config: shared.config,
   ...(shared.weaponId && { weaponId: shared.weaponId }),

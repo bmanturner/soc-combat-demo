@@ -39,6 +39,8 @@ export interface GameStore {
   toast: Toast | null;
   /** Bumped whenever the board must fully redraw (new battle, resize). */
   boardVersion: number;
+  /** Unique fight identity, independent of seed, time and board redraws. */
+  battleGeneration: number;
 }
 
 export const store = createStore<GameStore>(() => ({
@@ -61,6 +63,7 @@ export const store = createStore<GameStore>(() => ({
   helpOpen: false,
   toast: null,
   boardVersion: 0,
+  battleGeneration: 0,
 }));
 
 let toastSeq = 0;

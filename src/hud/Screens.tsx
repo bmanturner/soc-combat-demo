@@ -5,7 +5,8 @@ import type { ArmorClass, BattleState } from '../rules/types';
 import { controller } from '../game/controller';
 import { showToast, store } from '../game/store';
 import { useState } from 'react';
-import { useGame } from './hooks';
+import { useGame, useModal } from './hooks';
+import { battleShareUrl } from '../game/share';
 
 const STARTERS = ['daggers', 'shield', 'polearm', 'two_handed'];
 
@@ -47,6 +48,7 @@ export function Setup() {
   const encounterId = useGame((s) => s.encounterId);
   const weaponId = useGame((s) => s.weaponId);
   const armor = useGame((s) => s.armor);
+  const config = useGame((s) => s.config);
   const enc = encounterById(encounterId);
   return (
     <div className="screen setup" data-testid="setup">
@@ -76,14 +78,15 @@ export function Setup() {
       <div className="choice-grid armor">
         {(['clothing', 'light', 'medium', 'heavy'] as ArmorClass[]).map((id) => {
           const a = ARMOR[id];
+          const moveAp = { clothing: config.moveApClothing, light: config.moveApLight, medium: config.moveApMedium, heavy: config.moveApHeavy }[id];
           const allowed = enc.allowedArmor.includes(id);
           return (
             <button key={id} className={`choice ${armor === id ? 'on' : ''}`} disabled={!allowed} onClick={() => controller.setLoadout({ armor: id })} data-testid={`armor-${id}`}>
               <div className="choice-name">{armor === id ? '✓ ' : ''}{a.name}</div>
               <div className="choice-stats">
-                Armor {a.armor} · Dodge {Math.round(a.dodge * 100)}%
+                Armor {a.armor} · Dodge {Math.round(a.dodge * 100)}% · {moveAp} AP/tile · {Math.floor(config.movementBudget / moveAp)} tiles per move
               </div>
-              <div className="choice-blurb">{allowed ? a.blurb : 'Jubal starts in village clothing. Armor comes later.'}</div>
+              <div className="choice-blurb">{allowed ? `Default example: ${a.blurb}` : 'Jubal starts in village clothing. Armor comes later.'}</div>
             </button>
           );
         })}
@@ -132,7 +135,7 @@ function PatternGlyph({ pattern }: { pattern: string }) {
   );
 }
 
-export function report(b: BattleState, shareLink: string): string {
+export function report(b: BattleState): string {
   const enc = encounterById(b.encounterId);
   const jubal = b.units.find((u) => u.id === 'jubal');
   const diff = diffFromDefaults(b.config);
@@ -151,7 +154,7 @@ export function report(b: BattleState, shareLink: string): string {
     ...rows,
     '',
     Object.keys(diff).length ? `Changed settings: ${Object.entries(diff).map(([k, v]) => `${k}=${String(v)}`).join(', ')}` : 'Settings: all defaults',
-    `Replay this exact fight: ${shareLink}`,
+    `Try the same setup and seed (encounter, loadout and rules; not an action replay): ${battleShareUrl(b)}`,
     '',
     'Notes:',
   ].join('\n');
@@ -160,13 +163,16 @@ export function report(b: BattleState, shareLink: string): string {
 export function ResultOverlay() {
   const battle = useGame((s) => s.battle);
   const busy = useGame((s) => s.busy);
+  const generation = useGame((s) => s.battleGeneration);
   const [dismissed, setDismissed] = useState<number | null>(null);
-  if (!battle || battle.outcome === 'ongoing' || busy || dismissed === battle.seed + battle.clock) return null;
+  const visible = !!battle && battle.outcome !== 'ongoing' && !busy && dismissed !== generation;
+  const modal = useModal(visible);
+  if (!visible || !battle) return null;
   const win = battle.outcome === 'victory';
   const party = battle.units.filter((u) => u.side === 'player');
   return (
     <div className="overlay" data-testid="result">
-      <div className={`result ${win ? 'win' : 'loss'}`}>
+      <div ref={modal} role="dialog" aria-modal="true" aria-label="Battle result" tabIndex={-1} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setDismissed(generation); } }} className={`result ${win ? 'win' : 'loss'}`}>
         <h2>{win ? 'Victory' : 'Defeat'}</h2>
         <p className="muted">Fight length {Math.round(battle.clock)} AP</p>
         <table>
@@ -205,13 +211,13 @@ export function ResultOverlay() {
         <div className="btn-row">
           <button
             onClick={() => {
-              void navigator.clipboard.writeText(report(battle, controller.shareLink())).then(() => showToast('Report copied: paste it to Brendan'));
+              void navigator.clipboard.writeText(report(battle)).then(() => showToast('Report copied: paste it to Brendan'));
             }}
             data-testid="copy-report"
           >
             Copy report
           </button>
-          <button onClick={() => setDismissed(battle.seed + battle.clock)}>Look at the board</button>
+          <button onClick={() => setDismissed(generation)}>Look at the board</button>
         </div>
       </div>
     </div>
@@ -222,10 +228,15 @@ const STATUS_LABEL = { source: "Aaron's rule", tentative: 'Tentative math', demo
 
 export function SettingsDrawer() {
   const open = useGame((s) => s.settingsOpen);
+  // Unmount the draft on every close path; reopening always starts from committed rules.
+  return open ? <SettingsContent /> : null;
+}
+
+function SettingsContent() {
+  const modal = useModal(true);
   const config = useGame((s) => s.config);
   const hasBattle = useGame((s) => !!s.battle);
   const [draft, setDraft] = useState<RulesConfig | null>(null);
-  if (!open) return null;
   const cfg = draft ?? config;
   const groups = [...new Set(SETTINGS.map((s) => s.group))];
   const set = (k: keyof RulesConfig, v: unknown) => setDraft({ ...cfg, [k]: v } as RulesConfig);
@@ -236,7 +247,7 @@ export function SettingsDrawer() {
   const changed = Object.keys(diffFromDefaults(cfg)).length;
   return (
     <div className="drawer-wrap" onClick={close}>
-      <aside className="drawer" onClick={(e) => e.stopPropagation()} data-testid="settings">
+      <div ref={modal} role="dialog" aria-modal="true" aria-label="Rules and settings" tabIndex={-1} className="drawer" onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } }} onClick={(e) => e.stopPropagation()} data-testid="settings">
         <div className="drawer-head">
           <h2>Rules & settings</h2>
           <button onClick={close}>✕</button>
@@ -250,8 +261,7 @@ export function SettingsDrawer() {
             className="primary"
             onClick={() => {
               controller.applyConfig(cfg, hasBattle);
-              setDraft(null);
-              store.setState({ settingsOpen: false });
+              close();
             }}
             data-testid="apply-settings"
           >
@@ -260,8 +270,7 @@ export function SettingsDrawer() {
           <button onClick={() => setDraft({ ...DEFAULT_CONFIG })}>Reset to defaults</button>
           <button
             onClick={() => {
-              controller.applyConfig(cfg, false);
-              void navigator.clipboard.writeText(controller.shareLink()).then(() => showToast('Share link copied'));
+              void navigator.clipboard.writeText(controller.shareLink(cfg)).then(() => showToast('Share link copied'));
             }}
           >
             Copy share link
@@ -276,7 +285,7 @@ export function SettingsDrawer() {
             ))}
           </section>
         ))}
-      </aside>
+      </div>
     </div>
   );
 }
@@ -314,20 +323,22 @@ function SettingRow({ def, value, onChange, changed }: { def: SettingDef; value:
 
 export function HelpOverlay() {
   const open = useGame((s) => s.helpOpen);
+  const cfg = useGame(s => s.battle?.config ?? s.config);
+  const modal = useModal(open);
   if (!open) return null;
   return (
     <div className="overlay" onClick={() => store.setState({ helpOpen: false })}>
-      <div className="help" onClick={(e) => e.stopPropagation()} data-testid="help">
+      <div ref={modal} role="dialog" aria-modal="true" aria-label="How to play" tabIndex={-1} className="help" onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); store.setState({ helpOpen: false }); } }} onClick={(e) => e.stopPropagation()} data-testid="help">
         <h2>How to play</h2>
         <ul>
           <li><b>The timeline is the game.</b> Every action costs AP. When you end your turn, your icon moves that many AP to the right. Whoever reaches 0 next acts next.</li>
-          <li><b>Move, act, move.</b> You get up to 50 AP of movement per turn (5 / 4 / 3 tiles in light / medium / heavy) and one action, in any order.</li>
+          <li><b>Move, act, move.</b> You get up to {cfg.movementBudget} AP of movement per turn ({[cfg.moveApLight, cfg.moveApMedium, cfg.moveApHeavy].map(ap => Math.floor(cfg.movementBudget / ap)).join(' / ')} tiles in light / medium / heavy) and one action, in any order.</li>
           <li><b>The ghost icon</b> on the timeline shows where your next turn lands for whatever you're hovering. Red: something lands on you first. Amber: the Nephilim could sweep you first.</li>
           <li><b>Weapons hit shapes.</b> Aim at a tile; everything in the pattern gets hit. Two-handed side tiles are less accurate.</li>
           <li><b>Engagement.</b> Walking away from an adjacent melee enemy can get you held: you move one tile and stop, and they may get a free swing. The path preview shows the odds.</li>
-          <li><b>Flanked.</b> Enemies on opposite sides (N/S or E/W) strip your engagement, halve your reactions and make you take +25% damage. It works on them too.</li>
-          <li><b>Telegraphs.</b> Red tiles land after a delay. If your next turn comes before impact, you can walk out. If not, you're caught.</li>
-          <li><b>Wait</b> costs 25 AP: a cheap way to slip behind an enemy's turn.</li>
+          <li><b>Flanked.</b> Enemies on opposite sides (N/S or E/W{cfg.flankDiagonals ? ', and diagonal pairs' : ''}) strip your engagement, multiply your reactions by {Math.round(cfg.flankReactionMult * 100)}% and make you take +{Math.round(cfg.flankDamageTaken * 100)}% damage. It works on them too.</li>
+          <li><b>Telegraphs.</b> Red tiles land after a delay. Escape requires a turn before impact (or a tie when units act first), enough movement and a reachable safe tile. Engagement can still hold you.</li>
+          <li><b>Wait</b> on an empty turn costs {cfg.minTurnDelay} AP: a cheap way to slip behind an enemy's turn.</li>
         </ul>
         <p className="muted">Keys: M move · A attack · 1–2 skills · Space end turn · Esc / right-click cancel.</p>
         <button className="primary" onClick={() => store.setState({ helpOpen: false })}>Got it</button>

@@ -36,6 +36,9 @@ export class BoardScene extends Phaser.Scene implements Animator {
   private labels: Phaser.GameObjects.Text[] = [];
   private tokens = new Map<string, Token>();
   private animating = false;
+  private animationJobs = new Set<() => void>();
+  private animationEpoch = 0;
+  private animationObjects = new Set<Phaser.GameObjects.GameObject>();
   private version = -1;
   private unsub: (() => void) | null = null;
 
@@ -74,6 +77,7 @@ export class BoardScene extends Phaser.Scene implements Animator {
     });
     registerAnimator(this);
     const cleanup = () => {
+      this.cancel();
       this.unsub?.();
       this.unsub = null;
       unregisterAnimator(this);
@@ -431,13 +435,40 @@ export class BoardScene extends Phaser.Scene implements Animator {
 
   // ---------------- Animation ----------------
 
+  cancel(): void {
+    this.animationEpoch += 1;
+    for (const cancel of [...this.animationJobs]) cancel();
+    for (const object of this.animationObjects) {
+      this.tweens.killTweensOf(object);
+      object.destroy();
+    }
+    this.animationObjects.clear();
+    this.animating = false;
+  }
+
+  private animationJob(start: (done: () => void) => () => void): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const cancel = () => {
+        stop();
+        this.animationJobs.delete(cancel);
+        reject(new Error('Animation cancelled'));
+      };
+      const stop = start(() => { this.animationJobs.delete(cancel); resolve(); });
+      this.animationJobs.add(cancel);
+    });
+  }
+
   private wait(ms: number): Promise<void> {
-    return new Promise((r) => this.time.delayedCall(ms, () => r()));
+    return this.animationJob(done => {
+      const timer = this.time.delayedCall(ms, done);
+      return () => timer.remove(false);
+    });
   }
 
   private tween(cfg: Phaser.Types.Tweens.TweenBuilderConfig): Promise<void> {
-    return new Promise((r) => {
-      this.tweens.add({ ...cfg, onComplete: () => r() });
+    return this.animationJob(done => {
+      const tween = this.tweens.add({ ...cfg, onComplete: done });
+      return () => tween.stop();
     });
   }
 
@@ -446,11 +477,13 @@ export class BoardScene extends Phaser.Scene implements Animator {
       .text(x, y, text, { fontFamily: UI_FONT, fontSize: `${Math.round(this.tile * (big ? 0.42 : 0.3))}px`, color, fontStyle: 'bold', stroke: '#000', strokeThickness: 4 })
       .setOrigin(0.5)
       .setDepth(30);
-    this.tweens.add({ targets: t, y: y - this.tile * 0.7, alpha: { from: 1, to: 0 }, duration: 1100, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
+    this.animationObjects.add(t);
+    this.tweens.add({ targets: t, y: y - this.tile * 0.7, alpha: { from: 1, to: 0 }, duration: 1100, ease: 'Cubic.easeOut', onComplete: () => { this.animationObjects.delete(t); t.destroy(); } });
   }
 
   async play(events: GameEvent[], before: BattleState, after: BattleState, speed: number): Promise<void> {
     if (!this.sys.isActive()) return;
+    const epoch = this.animationEpoch;
     this.animating = true;
     const k = 1 / Math.max(0.25, speed);
     const view = structuredClone(before);
@@ -545,16 +578,19 @@ export class BoardScene extends Phaser.Scene implements Animator {
           }
           case 'effectCast': {
             const g = this.add.graphics().setDepth(15);
+            this.animationObjects.add(g);
             this.fillTiles(g, e.effect.tiles, hex(COLORS.danger), 0.7);
             const xs = e.effect.tiles.map((p) => p.x);
             const ys = e.effect.tiles.map((p) => p.y);
             this.float(this.cx((Math.min(...xs) + Math.max(...xs)) / 2), this.cy((Math.min(...ys) + Math.max(...ys)) / 2), `${e.effect.name}!`, '#ffdddd', true);
             await this.tween({ targets: g, alpha: { from: 1, to: 0 }, duration: 520 * k });
+            this.animationObjects.delete(g);
             g.destroy();
             break;
           }
           case 'effectResolve': {
             const g = this.add.graphics().setDepth(15);
+            this.animationObjects.add(g);
             this.fillTiles(g, e.tiles, 0xffe2b0, 0.85);
             const big = e.tiles.length > 12;
             this.cameras.main.shake(big ? 380 : 220, big ? 0.014 : 0.006);
@@ -568,6 +604,7 @@ export class BoardScene extends Phaser.Scene implements Animator {
               this.paintToken(tok, t, false, false);
             }
             await this.tween({ targets: g, alpha: { from: 1, to: 0 }, duration: 520 * k });
+            this.animationObjects.delete(g);
             g.destroy();
             break;
           }
@@ -584,8 +621,10 @@ export class BoardScene extends Phaser.Scene implements Animator {
             break;
         }
       }
+    } catch (err) {
+      if (epoch === this.animationEpoch) throw err;
     } finally {
-      this.animating = false;
+      if (epoch === this.animationEpoch) this.animating = false;
     }
   }
 }
