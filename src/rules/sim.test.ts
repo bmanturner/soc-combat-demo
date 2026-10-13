@@ -92,5 +92,5 @@ describe('Bot-played battles', () => {
       ),
       { numRuns: 40 },
     );
-  });
+  }, 30_000); // Full seeded battles, not a small unit test; keep the sampled runs intact.
 });

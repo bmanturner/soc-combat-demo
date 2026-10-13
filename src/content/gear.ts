@@ -2,13 +2,23 @@
 
 import type { ArmorClass, ArmorDef, AttackMode, FieldProvenance, SkillDef, WeaponDef } from '../rules/types';
 
+function armorProvenance(id: ArmorClass): Pick<ArmorDef, 'provenance' | 'fieldProvenance'> {
+  const demo: FieldProvenance = { owner: 'demo', status: 'demo', why: 'Exact secondary stat is a sandbox proposal, not an Aaron number.' };
+  return {
+    provenance: { concept: 'source', numbers: 'demo', why: 'Aaron: ordinary starting clothing and light/medium/heavy armor concepts; approximate armor bands 100/200/300. Exact MR, dodge and engagement/disengagement bonuses are demo. Movement costs are sourced separately in Rules.' },
+    fieldProvenance: {
+      armor: id === 'clothing' ? { ...demo, why: 'Clothing armor 25 is a demo value.' } : { owner: 'Aaron', status: 'source', why: 'Aaron’s approximate light/medium/heavy armor bands: 100/200/300; implemented as exact sandbox defaults.' },
+      mr: demo, dodge: demo, engagement: demo, disengagement: demo,
+    },
+  };
+}
 export const ARMOR: Record<ArmorClass, ArmorDef> = {
   // [source] Jubal starts in ordinary clothing; armor numbers [demo].
-  clothing: { id: 'clothing', name: 'Village Clothing', armor: 25, mr: 0, dodge: 0.15, engagement: 0, disengagement: 3, blurb: 'A rope-tied robe. Light on your feet, light on protection.' },
+  clothing: { ...armorProvenance('clothing'), id: 'clothing', name: 'Village Clothing', armor: 25, mr: 0, dodge: 0.15, engagement: 0, disengagement: 3, blurb: 'A rope-tied robe. Light on your feet, light on protection.' },
   // [source] bands ~100/200/300 Armor; move 10/12.5/15 AP per tile. Engagement directions [source], numbers [demo].
-  light: { id: 'light', name: 'Light Armor', armor: 100, mr: 25, dodge: 0.15, engagement: 1, disengagement: 4, blurb: '5 tiles per move. Slips out of melee. Takes 50% of physical damage.' },
-  medium: { id: 'medium', name: 'Medium Armor', armor: 200, mr: 40, dodge: 0.08, engagement: 3, disengagement: 3, blurb: '4 tiles per move. The safe middle. Takes 33% of physical damage.' },
-  heavy: { id: 'heavy', name: 'Heavy Armor', armor: 300, mr: 50, dodge: 0, engagement: 5, disengagement: 1, blurb: '3 tiles per move. Pins enemies, gets pinned. Takes 25% of physical damage.' },
+  light: { ...armorProvenance('light'), id: 'light', name: 'Light Armor', armor: 100, mr: 25, dodge: 0.15, engagement: 1, disengagement: 4, blurb: '5 tiles per move. Slips out of melee. Takes 50% of physical damage.' },
+  medium: { ...armorProvenance('medium'), id: 'medium', name: 'Medium Armor', armor: 200, mr: 40, dodge: 0.08, engagement: 3, disengagement: 3, blurb: '4 tiles per move. The safe middle. Takes 33% of physical damage.' },
+  heavy: { ...armorProvenance('heavy'), id: 'heavy', name: 'Heavy Armor', armor: 300, mr: 50, dodge: 0, engagement: 5, disengagement: 1, blurb: '3 tiles per move. Pins enemies, gets pinned. Takes 25% of physical damage.' },
 };
 
 const phys = { damageType: 'physical' as const, ranged: false };
