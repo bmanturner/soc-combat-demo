@@ -12,6 +12,10 @@ export function unitName(state: BattleState, id: string): string {
 export function describeEvent(state: BattleState, e: GameEvent): string | null {
   const n = (id: string) => unitName(state, id);
   switch (e.t) {
+    case 'reload':
+      return `${n(e.unitId)} reloads ${e.name} in slot ${e.slot + 1} (${e.apCost} AP)`;
+    case 'swapWeapon':
+      return `${n(e.unitId)} swaps ${e.oldName} → ${e.newName}, slot ${e.slot + 1} (${e.apCost} AP)`;
     case 'turnStart':
       return `— ${n(e.unitId)}'s turn @ ${e.clock} AP`;
     case 'move':

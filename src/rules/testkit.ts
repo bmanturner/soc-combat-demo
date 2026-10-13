@@ -1,5 +1,7 @@
 // Helpers for building small deterministic battles in tests and fixtures.
 
+import { availableWeapons, refreshEquipment } from './equipment';
+import { WEAPONS } from '../content/gear';
 import { DEFAULT_CONFIG, type RulesConfig } from './config';
 import { applyAction, createBattle } from './engine';
 import type { Vec } from './geometry';
@@ -41,7 +43,16 @@ export function testEncounter(o: TestBattleOpts): EncounterDef {
 
 export function testBattle(o: TestBattleOpts): BattleState {
   const config = { ...DEFAULT_CONFIG, ...o.config };
-  return createBattle(testEncounter(o), { weaponId: o.weapon ?? 'daggers', armor: o.armor ?? 'light' }, config, o.seed ?? 1).state;
+  // Laboratory-only authored monster equipment fixtures; production setup validation stays strict.
+  const custom = o.weapon && !availableWeapons('test', config).some(w => w.id === o.weapon);
+  const state = createBattle(testEncounter(o), { weaponId: custom ? 'daggers' : o.weapon ?? 'daggers', armor: o.armor ?? 'light' }, config, o.seed ?? 1).state;
+  if (custom) {
+    const u = state.units[0]!;
+    u.carried[0].defId = o.weapon!;
+    u.personalSkills = WEAPONS[o.weapon!]!.skills.map(id => ({ id, readyAt: 0 }));
+    refreshEquipment(state, u);
+  }
+  return state;
 }
 
 /** Apply a list of actions, collecting events. */

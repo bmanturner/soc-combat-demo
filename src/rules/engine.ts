@@ -1,13 +1,14 @@
 // The combat engine: build a battle, apply actions, run the AP timeline. Deterministic given seed + actions.
 
+import { attackMode, availableSkills, combatActionReason, enemyTuning, equippedItem, refreshEquipment, reloadReason, reloadSlot, skillUseReason, swapReason, validateSetup, weaponInstance } from './equipment';
 import { ARMOR, SKILLS, WEAPONS } from '../content/gear';
 import { DAMAGE_SCALE, UNITS, companionHp } from '../content/units';
 import type { RulesConfig } from './config';
 import { keepEngagedChance } from './formulas';
 import { actionApCost, allowedReactions, delayedDamage, effectCanHit, resolvedDamage, resolveSkill, schedulerCompare, turnDelay } from './resolvers';
 import { add, cheb, eq, key, line, sign, type Vec } from './geometry';
-import { basicAttackHits, ringPenalty, skillTargeting } from './targeting';
-import { createRng, roll } from './rng';
+import { basicAttackHits, dualWieldCandidates, ringPenalty, skillTargeting } from './targeting';
+import { createRng, pick, roll } from './rng';
 import {
   alive,
   blocksSight,
@@ -17,7 +18,6 @@ import {
   lineOfSight,
   occupant,
   round3,
-  skillReady,
   tilesOf,
   unitById,
   walkable,
@@ -41,6 +41,7 @@ import { reachable } from './queries';
 export class RulesError extends Error {}
 
 const emptyTelemetry = (): UnitTelemetry => ({
+  reloads: 0, swaps: 0,
   turns: 0, moveAp: 0, actionAp: 0, waitAp: 0, damageDealt: 0, damageTaken: 0, attacks: 0, hits: 0, kos: 0,
   escapes: 0, caught: 0, disengageAttempts: 0, disengageFails: 0,
 });
@@ -61,16 +62,21 @@ function buildUnit(p: Placement, order: number, level: number, config: RulesConf
   if (!tpl) throw new Error(`unknown template ${p.template}`);
   const isJubal = tpl.id === 'jubal';
   const armorClass = isJubal && setup ? setup.armor : tpl.armorClass;
-  const weaponId = isJubal && setup ? setup.weaponId : tpl.weapon;
+  const ids: [string, string | null] = isJubal && setup ? setup.weaponIds ?? [setup.weaponId!, null] : [tpl.weapon, tpl.secondaryWeapon ?? null];
+  const equippedSlot = isJubal ? setup?.equippedSlot ?? 0 : 0;
+  const weaponId = ids[equippedSlot]!;
   const weapon = WEAPONS[weaponId];
   if (!weapon) throw new Error(`unknown weapon ${weaponId}`);
   const armor = ARMOR[armorClass];
   const isPlayer = tpl.side === 'player';
   const dmgScale = isPlayer ? (DAMAGE_SCALE[level] ?? 1) * config.playerDamageMult : config.enemyDamageMult;
-  const hp = isPlayer ? (companionHp(tpl.id, level) ?? tpl.hp) : Math.round(tpl.hp * config.enemyHpMult);
+  const hp = isPlayer ? (companionHp(tpl.id, level) ?? tpl.hp) : Math.round(tpl.hp * config.enemyHpMult * enemyTuning(config, tpl.id, 'hp'));
   const attack: AttackProfile = { ...weapon.attack, damage: round3(weapon.attack.damage * dmgScale) };
-  const skillIds = [...new Set([...(weapon.skills ?? []), ...(tpl.skills ?? [])])];
-  return {
+  const skillIds = isJubal ? [...(tpl.skills ?? [])] : [...new Set([...(tpl.skills ?? []), ...(weapon.id === 'hunting_bow' ? ['aimed_shot'] : weapon.skills)])];
+  const owner = p.id ?? tpl.id;
+  const u: UnitState = {
+    carried: [weaponInstance(owner, 0, ids[0]), ids[1] ? weaponInstance(owner, 1, ids[1]) : null],
+    equippedSlot, personalSkills: skillIds.map(id => ({ id, readyAt: 0 })), proficiencies: [], unlockedSpecialFamilies: [], reloadOwedSlot: null, turnOrdinal: 0,
     id: p.id ?? tpl.id,
     templateId: tpl.id,
     name: p.name ?? tpl.name,
@@ -104,9 +110,12 @@ function buildUnit(p: Placement, order: number, level: number, config: RulesConf
     ai: tpl.ai ?? null,
     order,
   };
+  refreshEquipment({ config }, u);
+  return u;
 }
 
 export function createBattle(enc: EncounterDef, setup: Setup, config: RulesConfig, seed: number): { state: BattleState; events: GameEvent[] } {
+  setup = validateSetup(enc, setup, config);
   const tiles: Terrain[] = [];
   for (const row of enc.map.rows) for (const ch of row) tiles.push(TERRAIN[ch] ?? 'floor');
   const placements: Placement[] = [
@@ -119,7 +128,9 @@ export function createBattle(enc: EncounterDef, setup: Setup, config: RulesConfi
     const level = tpl?.side === 'player' ? enc.jubalLevel : (tpl?.level ?? 1);
     return buildUnit(p, i, level, config, setup);
   });
+  if (new Set(units.flatMap(u => u.carried.filter(item => item !== null).map(item => item.instanceId))).size !== units.flatMap(u => u.carried.filter(item => item !== null)).length) throw new RulesError('duplicate weapon instance identities');
   const state: BattleState = {
+    setup: { weaponIds: [...setup.weaponIds!], equippedSlot: setup.equippedSlot ?? 0, armor: setup.armor },
     encounterId: enc.id,
     seed,
     rng: createRng(seed),
@@ -155,7 +166,13 @@ export function applyAction(prev: BattleState, action: Action): { state: BattleS
       doMove(state, unit, action.to, events);
       break;
     case 'attack':
-      doAttack(state, unit, action.target, events);
+      doAttack(state, unit, action.target, events, action.modeId);
+      break;
+    case 'reload':
+      doReload(state, unit, events);
+      break;
+    case 'swapWeapon':
+      doSwap(state, unit, action.slot, events);
       break;
     case 'skill':
       doSkill(state, unit, action.skillId, action.target, events);
@@ -205,6 +222,7 @@ export function advance(state: BattleState, events: GameEvent[]): void {
       continue;
     }
     const u = unitById(state, next.id);
+    u.turnOrdinal += 1;
     state.active = {
       unitId: u.id,
       startedAt: state.clock,
@@ -483,20 +501,60 @@ function markStationary(state: BattleState, profile: { stationaryDiscount?: bool
   if (profile.stationaryDiscount && a.moved) a.surchargePaid = true;
 }
 
-function doAttack(state: BattleState, unit: UnitState, target: Vec, events: GameEvent[]): void {
+function consumeBolt(unit: UnitState): void {
+  equippedItem(unit).loaded = false;
+  unit.reloadOwedSlot = unit.equippedSlot;
+}
+function doReload(state: BattleState, unit: UnitState, events: GameEvent[]): void {
+  const reason = reloadReason(state, unit);
+  if (reason) throw new RulesError(reason);
+  const slot = reloadSlot(unit, state.config), item = unit.carried[slot]!, w = WEAPONS[item.defId]!;
+  const cost = actionApCost(state, unit, { apCost: w.reloadAp! });
+  item.loaded = true;
+  if (unit.reloadOwedSlot === slot) unit.reloadOwedSlot = null;
+  state.active!.acted = true;
+  state.active!.actionSpent += cost;
+  state.telemetry[unit.id]!.reloads += 1;
+  events.push({ t: 'reload', unitId: unit.id, slot, name: w.name, apCost: cost });
+}
+function doSwap(state: BattleState, unit: UnitState, slot: 0 | 1, events: GameEvent[]): void {
+  const reason = swapReason(state, unit, slot);
+  if (reason) throw new RulesError(reason);
+  const oldName = WEAPONS[unit.weaponId]!.name;
+  const cost = actionApCost(state, unit, { apCost: state.config.weaponSwapAp });
+  unit.equippedSlot = slot;
+  refreshEquipment(state, unit);
+  state.active!.acted = true;
+  state.active!.actionSpent += cost;
+  state.telemetry[unit.id]!.swaps += 1;
+  state.memory[`swap:${unit.id}`] = unit.turnOrdinal;
+  events.push({ t: 'swapWeapon', unitId: unit.id, slot, oldName, newName: WEAPONS[unit.weaponId]!.name, apCost: cost });
+}
+function doAttack(state: BattleState, unit: UnitState, target: Vec, events: GameEvent[], modeId?: string): void {
   const a = state.active!;
-  if (a.acted) throw new RulesError('already acted this turn');
-  const res = basicAttackHits(state, unit, target);
-  if (!res) throw new RulesError('cannot attack there');
+  const profile = attackMode(state, unit, modeId);
+  if (!profile) throw new RulesError('unknown attack mode');
+  const reason = combatActionReason(state, unit, 'attack', profile.ammo === 'bolt');
+  if (reason) throw new RulesError(reason);
+  const res = basicAttackHits(state, unit, target, modeId);
+  if (!res || res.hits.length === 0) throw new RulesError('cannot attack there');
   if (res.hits.filter((h) => h.unit.side !== unit.side).length === 0 && !state.config.friendlyFire) throw new RulesError('no enemy in that pattern');
-  const cost = actionApCost(state, unit, unit.attack);
-  markStationary(state, unit.attack);
+  const cost = actionApCost(state, unit, profile);
+  markStationary(state, profile);
+  if (profile.ammo === 'bolt') consumeBolt(unit);
   a.actionSpent += cost;
   a.acted = true;
-  events.push({ t: 'attack', attackerId: unit.id, name: unit.attack.name, tiles: res.tiles, apCost: cost, targetTile: target });
+  events.push({ t: 'attack', attackerId: unit.id, name: profile.name, tiles: res.tiles, apCost: cost, targetTile: target });
   for (const h of res.hits) {
     if (h.unit.ko) continue;
-    strike(state, unit, h.unit, unit.attack, ringPenalty(state, h.ring), events);
+    strike(state, unit, h.unit, profile, ringPenalty(state, h.ring), events);
+  }
+  if (profile.pattern === 'dualArc') {
+    const pool = dualWieldCandidates(state, unit, target);
+    if (pool.length) {
+      const secondary = pick(state.rng, pool).unit;
+      strike(state, unit, secondary, profile, 0, events);
+    }
   }
 }
 
@@ -504,18 +562,22 @@ function doAttack(state: BattleState, unit: UnitState, target: Vec, events: Game
 
 function doSkill(state: BattleState, unit: UnitState, skillId: string, target: Vec, events: GameEvent[]): void {
   const a = state.active!;
-  if (a.acted) throw new RulesError('already acted this turn');
-  const skill = SKILLS[skillId];
-  if (!skill || !unit.skills.some((s) => s.id === skillId)) throw new RulesError('unknown skill');
-  if (!skillReady(state, unit, skillId)) throw new RulesError('skill on cooldown');
+  const reason = skillUseReason(state, unit, skillId);
+  if (reason) throw new RulesError(reason);
+  const skill = SKILLS[skillId]!;
   const tg = skillTargeting(state, unit, skill, target);
   if (!tg.valid) throw new RulesError(tg.reason ?? 'invalid target');
   const cost = actionApCost(state, unit, skill);
   markStationary(state, skill);
   a.actionSpent += cost;
   a.acted = true;
-  const slot = unit.skills.find((s) => s.id === skillId)!;
-  slot.readyAt = round3(state.clock + skill.cooldown);
+  const owned = availableSkills(state, unit).find(s => s.id === skillId)!;
+  const readyAt = round3(state.clock + skill.cooldown);
+  if (owned.instanceId) equippedItem(unit).skillReadyAt[skillId] = readyAt;
+  else unit.personalSkills.find(s => s.id === skillId)!.readyAt = readyAt;
+  const slot = unit.skills.find(s => s.id === skillId);
+  if (slot) slot.readyAt = readyAt;
+  if (skill.consumesBolt) consumeBolt(unit);
   events.push({ t: 'attack', attackerId: unit.id, name: skill.name, tiles: tg.area ?? [target], apCost: cost, targetTile: target });
 
   const { profile, delay } = resolveSkill(state, unit, skill);

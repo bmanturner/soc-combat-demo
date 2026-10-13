@@ -1,6 +1,7 @@
 // Enemy AI and a competent "player bot" for headless balance sims. Each call returns the next single
 // action for the active unit; callers loop until it returns endTurn. Pure: reads state, never mutates it.
 
+import { attackMode, availableSkills, refreshEquipment, reloadReason, swapReason } from './equipment';
 import { SKILLS } from '../content/gear';
 import { actionApCost, delayedDamage, effectCanHit, hypotheticalBoard, resolveSkill, turnDelay, unitActsBefore } from './resolvers';
 import { DIRS8, add, cheb, eq, key, type Vec } from './geometry';
@@ -95,6 +96,14 @@ function scoreAttack(state: BattleState, p: AttackPreview, u: UnitState, focus: 
     if (target.side === u.side) s -= 2 * utility;
     else s += utility * (focus && t.unitId === focus.id ? 1.6 : 1);
   }
+  for (const c of p.candidates ?? []) {
+    const primary = p.targets[0]!;
+    // Conditional pool preview is labeled; discount a lethal primary's chance of leaving the pool.
+    const survival = c.unitId === primary.unitId && primary.kills ? 1 - primary.landChance : 1;
+    const target = unitById(state, c.unitId);
+    const remaining = Math.max(0, target.hp - (c.unitId === primary.unitId ? primary.expectedDamage : 0));
+    s += c.probability * survival * Math.min(c.expectedDamage, remaining) * (focus?.id === c.unitId ? 1.6 : 1);
+  }
   return s;
 }
 
@@ -107,7 +116,7 @@ interface Option {
 function optionsFrom(state: BattleState, u: UnitState, from: Vec, focus: UnitState | null, allowSkills: boolean): Option[] {
   const out: Option[] = attackOptions(state, u, from).map((p) => ({ preview: p, skillId: null, score: scoreAttack(state, p, u, focus) }));
   if (allowSkills) {
-    for (const s of u.skills) {
+    for (const s of availableSkills(state, u)) {
       const def = SKILLS[s.id];
       if (!def || def.special || def.kind === 'sigil' || !skillReady(state, u, s.id)) continue;
       for (const p of skillOptions(state, u, s.id, from)) {
@@ -123,7 +132,7 @@ function optionsFrom(state: BattleState, u: UnitState, from: Vec, focus: UnitSta
 }
 
 function toAction(u: UnitState, o: Option): Action {
-  return o.skillId ? { type: 'skill', unitId: u.id, skillId: o.skillId, target: o.preview.anchor } : { type: 'attack', unitId: u.id, target: o.preview.anchor };
+  return o.skillId ? { type: 'skill', unitId: u.id, skillId: o.skillId, target: o.preview.anchor } : { type: 'attack', unitId: u.id, target: o.preview.anchor, ...(o.preview.modeId ? { modeId: o.preview.modeId } : {}) };
 }
 
 function approach(state: BattleState, u: UnitState, target: UnitState, reach: Map<string, Reach>, avoid: (p: Vec, cost: number) => number): Action {
@@ -355,6 +364,8 @@ export function enemyAction(state: BattleState): Action {
   const a = state.active;
   if (!a) throw new Error('no active unit');
   const u = unitById(state, a.unitId);
+  const equipment = equipmentAction(state, u, nearestEnemy(state, u));
+  if (equipment) return equipment;
   switch (u.ai) {
     case 'nephilim':
       return nephilimAction(state, u);
@@ -372,8 +383,8 @@ export function enemyAction(state: BattleState): Action {
 // ---------------- Player bot (headless sims, "auto" button) ----------------
 
 /** Compatibility wrapper; all AP policy lives in the shared resolver. */
-export function plannedActionAp(state: BattleState, u: UnitState, skillId: string | null, willMove: boolean): number {
-  return actionApCost(state, u, skillId ? SKILLS[skillId]! : u.attack, willMove);
+export function plannedActionAp(state: BattleState, u: UnitState, skillId: string | null, willMove: boolean, modeId?: string): number {
+  return actionApCost(state, u, skillId ? SKILLS[skillId]! : attackMode(state, u, modeId) ?? u.attack, willMove);
 }
 
 /** Expected failed-disengage damage plus danger at the tile where movement is stopped. */
@@ -403,6 +414,23 @@ function exposureToBoss(state: BattleState, u: UnitState, tile: Vec, delay: numb
   const actsIn = boss.nextTurnAt - state.clock;
   if (actsIn >= delay) return 0;
   return lineOfSight(state, state.boss.eye, tile) ? state.config.rockThrowDamage * 0.4 : 0;
+}
+
+function equipmentAction(state: BattleState, u: UnitState, focus: UnitState | null): Action | null {
+  if (state.active!.acted) return null;
+  const reload = !reloadReason(state, u);
+  if (reload && state.config.crossbowReload === 'strict') return { type: 'reload', unitId: u.id };
+  const slot = u.equippedSlot === 0 ? 1 : 0;
+  // A paid commitment, not a free attack. Hysteresis guarantees at least two intervening turns.
+  if (!swapReason(state, u, slot) && u.turnOrdinal - (state.memory[`swap:${u.id}`] ?? -100) >= 3) {
+    const alternate = { ...u, equippedSlot: slot, skills: [...u.skills] } as UnitState;
+    refreshEquipment(state, alternate);
+    const board = { ...state, units: state.units.map(x => x.id === u.id ? alternate : x) };
+    const current = Math.max(0, ...optionsFrom(state, u, u.pos, focus, true).map(o => o.score * 100 / (o.preview.cycleAp ?? o.preview.apCost)));
+    const reserve = Math.max(0, ...optionsFrom(board, alternate, alternate.pos, focus, true).map(o => o.score * 100 / (state.config.weaponSwapAp + (o.preview.cycleAp ?? o.preview.apCost))));
+    if (reserve > current * 1.25 + 5) return { type: 'swapWeapon', unitId: u.id, slot };
+  }
+  return reload ? { type: 'reload', unitId: u.id } : null;
 }
 
 /** A reasonably competent player: hit, then get out of anything that would land before its next turn. */
@@ -441,6 +469,8 @@ export function botAction(state: BattleState, policy: PartyPolicy = 'expert'): A
     return best && !eq(best.p, u.pos) ? { type: 'move', unitId: u.id, to: best.p } : END(u);
   }
 
+  const equipment = equipmentAction(state, u, focus);
+  if (equipment) return equipment;
   const startReach = a.movementLocked ? new Map([[key(u.pos), { path: [u.pos], cost: 0, risks: [] }]]) : reachable(state, u.id);
   let bestPlan: Plan | null = null;
   for (const r of startReach.values()) {
@@ -454,14 +484,15 @@ export function botAction(state: BattleState, policy: PartyPolicy = 'expert'): A
       for (const rr of retreatReach.values()) {
         const q = rr.path[rr.path.length - 1]!;
         if (!eq(q, p) && occupant(state, q) && occupant(state, q)!.id !== u.id) continue;
-        const cost = plannedActionAp(state, u, o.skillId, r.cost + rr.cost > 0);
+        const cost = plannedActionAp(state, u, o.skillId, r.cost + rr.cost > 0, o.preview.modeId);
         const delay = turnDelay(state, u, spentNow + r.cost + cost + rr.cost);
         const risk = pathFailureCost(state, rr, (tile) => danger(tile, delay));
         const approachRisk = pathFailureCost(state, r, (tile) => danger(tile, delay));
         const expectedDanger = danger(q, delay) * pathSafety(rr) + risk + approachRisk;
         // Utility per committed timeline AP; cap overkill in scoreAttack, price failed approach
         // separately from retreat (damage has already happened when a retreat is held).
-        const v = o.score * pathSafety(r) * 100 / Math.max(1, delay) - expectedDanger * 3;
+        const reloadCycle = (o.preview.cycleAp ?? o.preview.apCost) - o.preview.apCost;
+        const v = o.score * pathSafety(r) * 100 / Math.max(1, delay + reloadCycle) - expectedDanger * 3;
         if (!bestR || v > bestR.v) bestR = { q, v };
       }
       if (!bestR) continue;

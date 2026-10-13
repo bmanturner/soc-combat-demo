@@ -23,7 +23,7 @@ describe('shared combat contract', () => {
   });
   it('skill-specific reaction metadata does not inherit the weapon policy', () => {
     const b = duel(); b.config.reactionsEnabled = true;
-    b.units[0]!.skills.push({ id: 'shield_bash', readyAt: 0 });
+    b.units[0]!.personalSkills.push({ id: 'shield_bash', readyAt: 0 });
     b.units[0]!.attack.allowedReactions = ['block'];
     const target = b.units[1]!; target.dodge = target.parry = target.block = 1;
     const original = SKILLS.shield_bash!;
@@ -45,7 +45,7 @@ describe('shared combat contract', () => {
     const b = testBattle({ rows: OPEN_7x7, jubal: { x: 2, y: 3 }, allies: [{ template: 'jabal', at: { x: 4, y: 3 } }], enemies: [{ template: 'wolf', at: { x: 3, y: 3 } }] });
     const t = unitById(b, 'wolf');
     expect(isFlanked(b, t)).toBe(true);
-    unitById(b, 'jubal').attack.ranged = true;
+    unitById(b, 'jubal').canEngage = false; // equipment-level ranged threat, not selected mode
     expect(isFlanked(b, t)).toBe(false);
   });
   it('timeline golden: ten movement plus seven reaction AP projects 17, not Wait price', () => {

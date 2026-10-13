@@ -18,6 +18,9 @@ export interface IllegalFallback {
 }
 
 export interface SimResult {
+  reloads: number;
+  swaps: number;
+  weaponStats: Record<string, { damage: number; ap: number; turns: number }>;
   illegalFallbacks: number;
   fallbacks: IllegalFallback[];
   stallReason: 'clock-not-advancing' | 'no-combat-progress' | 'action-cap' | 'no-active-unit' | null;
@@ -44,6 +47,9 @@ export function simulateBattle(initial: BattleState, maxActions = 4000, policy: 
   let frozen = 0;
   let noDamage = 0;
   let stallReason: SimResult['stallReason'] = null;
+  const weaponStats: SimResult['weaponStats'] = {};
+  let reloads = 0, swaps = 0;
+  const metric = (id: string) => weaponStats[id] ??= { damage: 0, ap: 0, turns: 0 };
   const fallbacks: IllegalFallback[] = [];
   while (state.outcome === 'ongoing' && state.active && actions < maxActions) {
     const previous = state;
@@ -60,6 +66,23 @@ export function simulateBattle(initial: BattleState, maxActions = 4000, policy: 
       state = applyAction(state, action).state;
 
     }
+    const jubal = unitById(previous, 'jubal');
+    const remainingHp = new Map(previous.units.map(unit => [unit.id, unit.hp]));
+    for (const e of state.log.slice(previous.log.length)) {
+      if (e.t === 'reload' && e.unitId === 'jubal') reloads++;
+      if (e.t === 'swapWeapon' && e.unitId === 'jubal') swaps++;
+      if (e.t === 'strike') {
+        const useful = Math.min(remainingHp.get(e.targetId) ?? 0, e.damage ?? 0);
+        if (e.attackerId === 'jubal') metric(jubal.weaponId).damage += useful;
+        remainingHp.set(e.targetId, (remainingHp.get(e.targetId) ?? 0) - useful);
+      }
+      if (e.t === 'turnEnd' && e.unitId === 'jubal') {
+        // A swap's whole turn is charged to the incoming item; reload/movement/wait/reaction costs are included.
+        const m = metric(unitById(state, 'jubal').weaponId);
+        m.ap += e.spent || e.delay;
+        m.turns++;
+      }
+    }
     actions += 1;
     frozen = state.clock > previous.clock ? 0 : frozen + 1;
     noDamage = state.units.some((u, i) => u.hp !== previous.units[i]?.hp || u.ko !== previous.units[i]?.ko) ? 0 : noDamage + 1;
@@ -73,6 +96,7 @@ export function simulateBattle(initial: BattleState, maxActions = 4000, policy: 
   const moveAp = tel.reduce((s, t) => s + t.moveAp, 0);
   const actAp = tel.reduce((s, t) => s + t.actionAp, 0);
   return {
+    reloads, swaps, weaponStats,
     outcome: state.outcome === 'ongoing' ? 'stalled' : state.outcome,
     clock: state.clock,
     actions,

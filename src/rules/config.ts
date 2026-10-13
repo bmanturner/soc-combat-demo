@@ -3,7 +3,20 @@
 
 export type SettingStatus = 'source' | 'tentative' | 'demo';
 
-export interface RulesConfig {
+import type { PlayerWeaponFamily } from './types';
+export const PLAYER_FAMILIES: PlayerWeaponFamily[] = ['daggers', 'shield', 'polearm', 'two_handed', 'bow', 'crossbow', 'dual_wield', 'javelin_shield', 'colossal'];
+export const ENEMY_TEMPLATES = ['small_rat', 'wolf', 'cultist_fighter', 'cultist_mage', 'nephilim'] as const;
+export type EnemyTemplateId = typeof ENEMY_TEMPLATES[number];
+type Tuning = Record<`wpn_${PlayerWeaponFamily}_${'dmg' | 'hit'}` | `enemy_${EnemyTemplateId}_${'hp' | 'dmg'}`, number>;
+const TUNING_DEFAULTS = Object.fromEntries([
+  ...PLAYER_FAMILIES.flatMap(f => [[`wpn_${f}_dmg`, 1], [`wpn_${f}_hit`, 0]]),
+  ...ENEMY_TEMPLATES.flatMap(f => [[`enemy_${f}_hp`, 1], [`enemy_${f}_dmg`, 1]]),
+]) as Tuning;
+export interface RulesConfig extends Tuning {
+  proficientAllWeapons: boolean;
+  unlockSpecialWeapons: boolean;
+  crossbowReload: 'flexible' | 'strict';
+  weaponSwapAp: number;
   // Timeline
   movementBudget: number;
   minTurnDelay: number;
@@ -66,6 +79,11 @@ export interface RulesConfig {
 }
 
 export const DEFAULT_CONFIG: RulesConfig = {
+  ...TUNING_DEFAULTS,
+  proficientAllWeapons: true,
+  unlockSpecialWeapons: true,
+  crossbowReload: 'flexible',
+  weaponSwapAp: 50,
   movementBudget: 50,
   minTurnDelay: 25,
   autoEndTurn: true,
@@ -131,6 +149,15 @@ export type SettingDef =
   | (BaseSetting & { type: 'select'; options: { value: string; label: string }[] });
 
 export const SETTINGS: SettingDef[] = [
+  { key: 'proficientAllWeapons', label: 'All weapon proficiencies (sandbox)', group: 'Weapons', type: 'boolean', status: 'demo', why: 'No skill trees are modeled. Enables second item skills for testing, not earned Soldier / Savage / Rogue proficiency.' },
+  { key: 'unlockSpecialWeapons', label: 'Unlock special weapons (sandbox)', group: 'Weapons', type: 'boolean', status: 'demo', why: 'Test Juggernaut, Hoplite and Dual-Wielder items without modeling Tier-2 tree combinations.' },
+  { key: 'weaponSwapAp', label: 'Swap weapon', group: 'Weapons', type: 'number', min: 25, max: 100, step: 5, unit: 'AP', status: 'demo', why: 'Swapping consumes the combat action (source); this delay is a demo proposal.' },
+  { key: 'crossbowReload', label: 'Crossbow reload policy', group: 'Weapons', type: 'select', options: [{ value: 'flexible', label: 'Flexible opener' }, { value: 'strict', label: 'Strict next combat action' }], status: 'demo', why: 'Aaron: “The purpose of the crossbow is for frontline fighters who want to get a shot off at range before engaging in melee combat.” Also: “However, on their next turn, they need to use a combat action to reload it, which also costs 50 AP.” Flexible permits fire → swap → melee; strict requires reload before any other combat action. Both require a paid reload between shots.' },
+  ...PLAYER_FAMILIES.flatMap((f): SettingDef[] => [
+    { key: `wpn_${f}_dmg`, label: `${f} damage`, group: 'Weapon tuning', type: 'number', min: .5, max: 1.5, step: .05, unit: 'x', status: 'demo', why: 'Scales every mode and item skill once. Base damage remains in content; this is a sandbox balance control.' },
+    { key: `wpn_${f}_hit`, label: `${f} accuracy`, group: 'Weapon tuning', type: 'number', min: -.2, max: .2, step: .01, unit: '%', status: 'demo', why: 'Additive hit modifier for every family mode and skill; final hit chance is clamped by the shared resolver.' },
+  ]),
+  ...ENEMY_TEMPLATES.flatMap((f): SettingDef[] => ['hp', 'dmg'].map(k => ({ key: `enemy_${f}_${k}` as keyof RulesConfig, label: `${f} ${k}`, group: 'Enemy tuning', type: 'number', min: .5, max: 1.5, step: .05, unit: 'x', status: 'demo', why: 'Per-template multiplier on authored base numbers, applied once alongside the global enemy multiplier.' }))),
   // Timeline
   { key: 'movementBudget', label: 'Movement AP per turn', group: 'Timeline', type: 'number', min: 20, max: 100, step: 5, unit: 'AP', status: 'source', why: 'Aaron: movement turns cap at 50 AP → 5/4/3 tiles for light/medium/heavy.' },
   { key: 'autoEndTurn', label: 'Auto-end exhausted turns', group: 'Timeline', type: 'boolean', status: 'demo', why: 'After acting, end automatically when movement is locked or less than one tile remains. Toggle off for manual timing experiments.' },
