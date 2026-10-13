@@ -75,7 +75,7 @@ Updated imported probes: sanitizer expects 5 rather than 0 for negative minTurnD
 - `E2E_PORT=4181 npx playwright test` — **13 passed**, final rerun 29.8 seconds. Earlier complete output retained in `e2e-results.txt`.
 - `npx tsx tools/sim.ts 40 all policy=expert` — exit 0.
 - `npx tsx tools/sim.ts 40 all policy=novice` — exit 0.
-- Both sim output files were parsed to verify **40 cells / 1,600 battles per policy**, each cell reporting **0 stalls and 0 illegal fallbacks**. Seeds 1000–1039 per cell. Raw tables: `sim-expert.txt`, `sim-novice.txt`.
+- Both sim output files were parsed to verify **40 cells / 1,600 battles per policy**, each cell reporting **0 stalls and 0 illegal fallbacks**. Seeds 1000–1039 per cell. Raw tables were later overwritten by the weapons-core baseline (see notes/weapons-core/); headline numbers above are authoritative for this phase.
 
 ## Simulation headlines
 

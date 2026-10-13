@@ -28,7 +28,7 @@ describe('HUD and engine parity', () => {
     expect(renderToStaticMarkup(createElement(Timeline))).toContain('no escape');
   });
   it.each([true, false])('anticipated sweep danger honors impact equality (%s units first)', first => {
-    const b = testBattle({ rows: OPEN_7x7, jubal: { x: 3, y: 4 }, enemies: [{ template: 'nephilim', at: { x: 2, y: 0 }, initiative: 30 }], boss: { eye: { x: 3, y: 1 }, sweepRowStart: 2, sweepCols: [0, 6] }, config: { tieUnitBeforeEffect: first } });
+    const b = testBattle({ rows: OPEN_7x7, jubal: { x: 3, y: 4 }, enemies: [{ template: 'nephilim', at: { x: 2, y: 0 }, initiative: 30 }], boss: { eye: { x: 3, y: 1 }, sweepRowStart: 2, sweepCols: [0, 6] }, config: { tieUnitBeforeEffect: first, sweepDelay: 75 } });
     expect(judge(b, b.units[0]!.pos, 105).danger).toBe(first ? 'none' : 'risk');
   });
   it('immune caster is absent from Incoming and receives no escape credit', () => {
