@@ -1,5 +1,6 @@
 // Orchestrates battles: player input → rules → board animation → AI turns. The only place that mutates `store`.
 
+import { availableWeapons } from '../rules/equipment';
 import { encounterById } from '../content/encounters';
 import { botAction, enemyAction } from '../rules/ai';
 import { DEFAULT_CONFIG, type RulesConfig } from '../rules/config';
@@ -187,7 +188,8 @@ export const controller = {
     const s = store.getState();
     const armor = enc.allowedArmor.includes(s.armor) ? s.armor : enc.defaultArmor;
     cancelBattle();
-    store.setState({ screen: 'setup', battle: null, busy: false, encounterId, armor });
+    const weaponId = availableWeapons(enc, s.config).some(w => w.id === s.weaponId) ? s.weaponId : 'daggers';
+    store.setState({ screen: 'setup', battle: null, busy: false, encounterId, armor, weaponId });
   },
 
   setLoadout(patch: Partial<{ weaponId: string; armor: 'clothing' | 'light' | 'medium' | 'heavy' }>): void {
@@ -200,9 +202,10 @@ export const controller = {
     const enc = encounterById(s.encounterId);
     const seed = opts.newSeed ? Math.floor(Math.random() * 2 ** 31) : s.seed;
     const armor = enc.allowedArmor.includes(s.armor) ? s.armor : enc.defaultArmor;
-    const { state, events } = createBattle(enc, { weaponId: s.weaponId, armor }, s.config, seed);
+    const weaponId = availableWeapons(enc, s.config).some(w => w.id === s.weaponId) ? s.weaponId : 'daggers';
+    const { state, events } = createBattle(enc, { weaponIds: [weaponId, null], armor }, s.config, seed);
     logSeq = 0;
-    store.setState({ screen: 'battle', battle: state, battleGeneration: s.battleGeneration + 1, seed, armor, actions: [], log: [], busy: false, mode: defaultMode(state), boardVersion: s.boardVersion + 1, hoverTile: null, hoverUnitId: null });
+    store.setState({ screen: 'battle', weaponId, battle: state, battleGeneration: s.battleGeneration + 1, seed, armor, actions: [], log: [], busy: false, mode: defaultMode(state), boardVersion: s.boardVersion + 1, hoverTile: null, hoverUnitId: null });
     appendLog(state, [{ t: 'info', text: `${enc.name}: ${enc.story}` }, ...events]);
     syncHash();
     void runLoop();

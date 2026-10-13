@@ -1,0 +1,18 @@
+
+Running 13 tests using 2 workers
+
+  ✓   1 e2e/demo.spec.ts:34:1 › menu lists the four encounters (460ms)
+  ✓   2 e2e/robustness.spec.ts:13:1 › U-07 Help and Settings capture combat keys and modal focus (1.7s)
+  ✓   3 e2e/demo.spec.ts:41:1 › player can move by clicking the board, and the timeline previews the cost (3.0s)
+  ✓   4 e2e/robustness.spec.ts:33:1 › U-12 all drawer close paths discard drafts, including focused Escape (4.0s)
+  ✓   6 e2e/robustness.spec.ts:50:1 › U-09 copying draft changes neither fight, settings nor URL (2.1s)
+  ✓   5 e2e/demo.spec.ts:58:1 › ending a turn hands control to the enemy AI and back (5.1s)
+  ✓   7 e2e/robustness.spec.ts:66:1 › U-13 Help uses active rules and setup movement uses floor (1.1s)
+  ✓   9 e2e/robustness.spec.ts:78:1 › U-01 leaving and restarting during animation does not strand AI (5.9s)
+  ✓   8 e2e/demo.spec.ts:73:1 › the bot can play the granary to a result screen (9.5s)
+  ✓  10 e2e/robustness.spec.ts:95:1 › U-02 real board bot handoff uses the committed movement and can be cancelled during think (3.7s)
+  ✓  12 e2e/robustness.spec.ts:122:1 › U-03 malformed shared loadout recovers with one toast and no errors (696ms)
+  ✓  11 e2e/demo.spec.ts:83:1 › settings travel in the share link (2.1s)
+  ✓  13 e2e/robustness.spec.ts:132:1 › U-10 same seed result returns after dismissal; U-09 report uses fight rules (11.7s)
+
+  13 passed (36.6s)

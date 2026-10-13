@@ -1,5 +1,6 @@
 // Read-only helpers over a BattleState: lookups, terrain, occupancy, flanking, engagement.
 
+import { skillUseReason } from './equipment';
 import type { RulesConfig } from './config';
 import { CARDINAL_IDX, add, cheb, dir, eq, hasLineOfSight, type Vec } from './geometry';
 import type { BattleState, Terrain, UnitState } from './types';
@@ -60,7 +61,7 @@ export function unitDistance(a: UnitState, b: UnitState): number {
 
 /** A unit that threatens melee: holds a melee weapon. */
 export function isMeleeThreat(u: UnitState): boolean {
-  return alive(u) && u.canEngage && !u.attack.ranged;
+  return alive(u) && u.canEngage;
 }
 
 /** Flanked: melee enemies on opposite sides (N/S or E/W; diagonals optional). */
@@ -77,7 +78,7 @@ export function isFlanked(state: BattleState, u: UnitState, config: RulesConfig 
 
 /** Can `e` currently hold `mover` in melee contact? */
 export function canEngageUnit(state: BattleState, e: UnitState, mover: UnitState): boolean {
-  if (!alive(e) || e.side === mover.side || !e.canEngage || e.attack.ranged) return false;
+  if (!alive(e) || e.side === mover.side || !e.canEngage) return false;
   if (e.massive && !state.config.bossesEngage) return false;
   if (isFlanked(state, e)) return false;
   return true;
@@ -95,8 +96,7 @@ export function engagersLeft(state: BattleState, mover: UnitState, from: Vec, to
 }
 
 export function skillReady(state: BattleState, u: UnitState, skillId: string): boolean {
-  const s = u.skills.find((x) => x.id === skillId);
-  return !!s && s.readyAt <= state.clock + 1e-9;
+  return skillUseReason(state, u, skillId) === null;
 }
 
 export const round3 = (n: number) => Math.round(n * 1000) / 1000;

@@ -39,6 +39,10 @@ export function patternTiles(kind: PatternKind, origin: Vec, i: number): Pattern
         { tile: add(origin, dir(i + 1)), ring: 1 },
         { tile: add(origin, dir(i + 2)), ring: 2 },
       ];
+    case 'dualArc':
+      return [-2, -1, 0, 1, 2].map(offset => ({ tile: add(origin, dir(i + offset)), ring: 0 }));
+    case 'ring8':
+      return [0, 1, 2, 3, 4, 5, 6, 7].map(d => ({ tile: add(origin, dir(d)), ring: 0 }));
     case 'ranged':
       return [];
   }
@@ -50,6 +54,7 @@ export function patternTiles(kind: PatternKind, origin: Vec, i: number): Pattern
  */
 export function aimDirection(kind: PatternKind, origin: Vec, target: Vec): number | null {
   const d = cheb(origin, target);
+  if (kind === 'ring8') return 0;
   const i = dirIndexOf(origin, target);
   if (i < 0) return null;
   if (kind === 'line2') return d <= 2 ? i : null;

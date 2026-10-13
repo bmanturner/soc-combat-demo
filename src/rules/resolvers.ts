@@ -1,4 +1,5 @@
 // Shared deterministic rules used by execution, previews and AI.
+import { attackMode, enemyTuning, equippedWeapon, familyTuning } from './equipment';
 import type { RulesConfig } from './config';
 import { damageAfterDefense } from './formulas';
 import { eq, type Vec } from './geometry';
@@ -48,16 +49,18 @@ export function allowedReactions(profile: { ranged?: boolean; allowedReactions?:
 }
 export function resolveSkill(state: BattleState, u: UnitState, skill: SkillDef) {
   const cfg = state.config;
-  const mult = u.side === 'player' ? cfg.playerDamageMult : cfg.enemyDamageMult;
+  const base = attackMode(state, u, skill.modeId) ?? u.attack;
+  const family = equippedWeapon(state, u).family;
+  const mult = (u.side === 'player' ? cfg.playerDamageMult : cfg.enemyDamageMult * enemyTuning(cfg, u.templateId, 'dmg')) * familyTuning(cfg, family, 'dmg');
   const raw = skill.special === 'rockThrow' ? cfg.rockThrowDamage : skill.special === 'rockfall' ? cfg.rockfallDamage : skill.special === 'sweep' ? cfg.sweepDamage : skill.rawDamage;
   const delayed = skill.kind === 'sigil' || skill.kind === 'sweep';
   const profile: AttackProfile = {
-    ...u.attack,
-    damage: (raw === undefined ? u.attack.damage : raw * mult) * skill.damageMult,
-    hit: (raw === undefined ? u.attack.hit : 0.9) + (skill.hitBonus ?? 0),
-    damageType: skill.damageType ?? u.attack.damageType,
-    pctPen: skill.special === 'sweep' ? cfg.sweepArmorPen : Math.min(1, (raw === undefined ? u.attack.pctPen : 0) + (skill.pctPenBonus ?? 0)),
-    flatPen: raw === undefined ? u.attack.flatPen : 0,
+    ...base,
+    damage: (raw === undefined ? base.damage : raw * mult) * skill.damageMult,
+    hit: (raw === undefined ? base.hit : 0.9 + familyTuning(cfg, family, 'hit')) + (skill.hitBonus ?? 0),
+    damageType: skill.damageType ?? base.damageType,
+    pctPen: skill.special === 'sweep' ? cfg.sweepArmorPen : Math.min(1, (raw === undefined ? base.pctPen : 0) + (skill.pctPenBonus ?? 0)),
+    flatPen: raw === undefined ? base.flatPen : 0,
     ranged: skill.kind === 'shot',
     allowedReactions: delayed ? [] : allowedReactions({ ranged: skill.kind === 'shot', ...(skill.allowedReactions && { allowedReactions: skill.allowedReactions }) }),
   };

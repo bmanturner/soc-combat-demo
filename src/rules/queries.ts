@@ -1,6 +1,9 @@
 // UI/AI queries: reachable tiles with engagement risk, attack previews, timeline projections.
 
-import { SKILLS } from '../content/gear';
+import { attackMode, attackModes, combatActionReason, equippedItem, equippedWeapon, reloadReason, reloadSlot, skillUseReason, swapReason } from './equipment';
+import { SKILLS, WEAPONS } from '../content/gear';
+export { availableWeapons, availableSkills, attackModes, equippedWeapon, equippedItem, effectiveStats, weaponLockReason, normalizeSetup } from './equipment';
+export { dualWieldCandidates, colossalRingTiles } from './targeting';
 import { keepEngagedChance, totalAvoidance } from './formulas';
 import { actionApCost, allowedReactions, delayedDamage, effectCanHit, hypotheticalBoard, resolvedDamage, resolveSkill, schedulerCompare, turnDelay, unitActsBefore, unitSchedule } from './resolvers';
 import { DIRS8, add, eq, key, type Vec } from './geometry';
@@ -146,6 +149,10 @@ export function expectedStrike(state: BattleState, attacker: UnitState, target: 
 }
 
 export interface AttackPreview {
+  modeId?: string;
+  instanceId?: string;
+  cycleAp?: number;
+  candidates?: (TargetPreview & { probability: number })[];
   kind: 'attack' | 'skill';
   anchor: Vec;
   tiles: Vec[];
@@ -155,47 +162,56 @@ export interface AttackPreview {
   note?: string;
 }
 
-export function basicAttackApCost(state: BattleState, u: UnitState): number {
-  return actionApCost(state, u, u.attack);
+export function basicAttackApCost(state: BattleState, u: UnitState, modeId?: string): number {
+  return actionApCost(state, u, attackMode(state, u, modeId) ?? u.attack);
 }
 
-/** Preview a basic attack aimed at a tile (or null if it can't be aimed there). */
-export function previewAttack(state: BattleState, u: UnitState, anchor: Vec, from: Vec = u.pos): AttackPreview | null {
+/** Preview a mode from a coherent hypothetical board, without RNG or mutation. Candidates are conditional, never guaranteed hits. */
+export function previewAttack(state: BattleState, u: UnitState, anchor: Vec, from: Vec = u.pos, modeId?: string): AttackPreview | null {
   const hypotheticalMove = !eq(u.pos, from);
   state = hypotheticalBoard(state, u, from);
   u = unitById(state, u.id);
-  const moved = u;
-  const res = basicAttackHits(state, moved, anchor);
+  const profile = attackMode(state, u, modeId);
+  if (!profile || combatActionReason(state, u, 'attack', profile.ammo === 'bolt')) return null;
+  const res = basicAttackHits(state, u, anchor, modeId);
   if (!res) return null;
-  const targets = res.hits
-    .filter((h) => h.unit.side !== u.side || state.config.friendlyFire)
-    .map((h) => expectedStrike(state, u, h.unit, { ...u.attack, hit: u.attack.hit - ringPenalty(state, h.ring) }));
+  const targets = res.hits.map(h => expectedStrike(state, u, h.unit, { ...profile, hit: profile.hit - ringPenalty(state, h.ring) }));
   if (targets.length === 0) return null;
-  return { kind: 'attack', anchor, tiles: res.tiles, apCost: actionApCost(state, u, u.attack, hypotheticalMove), targets };
+  const cost = actionApCost(state, u, profile, hypotheticalMove);
+  return {
+    kind: 'attack', modeId: profile.id, instanceId: equippedItem(u).instanceId, anchor, tiles: res.tiles, apCost: cost, targets,
+    cycleAp: cost + (profile.ammo === 'bolt' ? equippedWeapon(state, u).reloadAp! : 0),
+    ...(res.candidates ? { candidates: res.candidates.map(c => ({ ...expectedStrike(state, u, c.unit, profile), probability: c.probability })), note: 'One random secondary. Probabilities conditional on the current pool surviving unchanged; pool is recomputed after the primary (including death/dodge).' } : {}),
+  };
 }
 
-/** All anchors where a basic attack from `from` would hit at least one enemy. */
+/** All legal (mode, anchor) combinations, for UI and AI. */
 export function attackOptions(state: BattleState, u: UnitState, from: Vec = u.pos): AttackPreview[] {
   const out: AttackPreview[] = [];
-  if (u.attack.pattern === 'ranged') {
-    for (const e of state.units) {
-      if (!alive(e) || e.side === u.side) continue;
-      for (const t of tilesOf(e)) {
-        const p = previewAttack(state, u, t, from);
-        if (p) {
-          out.push(p);
-          break;
-        }
-      }
+  for (const mode of attackModes(state, u)) {
+    const anchors = mode.pattern === 'ranged' ? state.units.filter(e => alive(e) && e.side !== u.side).flatMap(tilesOf)
+      : mode.pattern === 'ring8' ? [from] : patternDirections(mode.pattern).map(i => add(from, DIRS8[i]!));
+    const seen = new Set<string>();
+    for (const anchor of anchors) {
+      const p = previewAttack(state, u, anchor, from, mode.id);
+      if (!p) continue;
+      const k = mode.pattern === 'ranged' ? p.targets[0]!.unitId : key(anchor);
+      if (!seen.has(k)) { out.push(p); seen.add(k); }
     }
-    return out;
-  }
-  for (const i of patternDirections(u.attack.pattern)) {
-    const anchor = add(from, DIRS8[i]!);
-    const p = previewAttack(state, u, anchor, from);
-    if (p) out.push(p);
   }
   return out;
+}
+
+export interface EquipmentPreview { valid: boolean; reason: string | null; apCost: number; nextTurnIn: number; slot: 0 | 1; instanceId: string | null }
+export function previewReload(state: BattleState, u: UnitState): EquipmentPreview {
+  const slot = reloadSlot(u, state.config), item = u.carried[slot];
+  const reason = reloadReason(state, u);
+  const apCost = actionApCost(state, u, { apCost: item ? WEAPONS[item.defId]!.reloadAp ?? 0 : 0 });
+  return { valid: !reason, reason, apCost, nextTurnIn: projectedNextTurn(state, apCost), slot, instanceId: item?.instanceId ?? null };
+}
+export function previewSwap(state: BattleState, u: UnitState, slot: 0 | 1): EquipmentPreview {
+  const reason = swapReason(state, u, slot), apCost = actionApCost(state, u, { apCost: state.config.weaponSwapAp });
+  return { valid: !reason, reason, apCost, nextTurnIn: projectedNextTurn(state, apCost), slot, instanceId: u.carried[slot]?.instanceId ?? null };
 }
 
 export function skillCost(state: BattleState, u: UnitState, skill: SkillDef): number {
@@ -204,7 +220,7 @@ export function skillCost(state: BattleState, u: UnitState, skill: SkillDef): nu
 
 export function previewSkill(state: BattleState, u: UnitState, skillId: string, anchor: Vec, from: Vec = u.pos): AttackPreview | null {
   const skill = SKILLS[skillId];
-  if (!skill) return null;
+  if (!skill || skillUseReason(state, u, skillId)) return null;
   const hypotheticalMove = !eq(u.pos, from);
   state = hypotheticalBoard(state, u, from);
   u = unitById(state, u.id);
@@ -227,7 +243,7 @@ export function previewSkill(state: BattleState, u: UnitState, skillId: string, 
   const t = tg.target!;
   const tp = expectedStrike(state, u, t, profile);
   const note = skill.kind === 'shove' ? 'Shoves 1 tile; dazes if blocked' : skill.kind === 'hook' ? 'Drags target next to you' : skill.applies === 'dazed' ? 'Dazes on hit' : undefined;
-  return { kind: 'skill', anchor, tiles: [anchor], apCost: cost, targets: [tp], ...(note && { note }) };
+  return { kind: 'skill', instanceId: equippedItem(u).instanceId, modeId: skill.modeId ?? 'basic', cycleAp: cost + (skill.consumesBolt ? equippedWeapon(state, u).reloadAp! : 0), anchor, tiles: [anchor], apCost: cost, targets: [tp], ...(note && { note }) };
 }
 
 export function skillOptions(state: BattleState, u: UnitState, skillId: string, from: Vec = u.pos): AttackPreview[] {

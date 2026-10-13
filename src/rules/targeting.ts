@@ -1,5 +1,6 @@
 // Targeting: which units a basic attack or skill aimed at a tile would affect. Shared by engine, previews, AI.
 
+import { attackMode } from './equipment';
 import { add, cheb, dir, dirIndexOf, type Vec } from './geometry';
 import { aimDirection, patternTiles } from './patterns';
 import { distToUnit, lineOfSight, occupant, terrainAt, walkable } from './state';
@@ -12,8 +13,22 @@ export interface PatternHit {
 }
 
 /** Units a basic attack from `unit` (at its current pos) aimed at `target` would hit, or null if not aimable. */
-export function basicAttackHits(state: BattleState, unit: UnitState, target: Vec): { tiles: Vec[]; hits: PatternHit[] } | null {
-  const p = unit.attack;
+export function dualWieldCandidates(state: BattleState, unit: UnitState, target: Vec): { unit: UnitState; probability: number }[] {
+  const i = aimDirection('dualArc', unit.pos, target);
+  if (i === null) return [];
+  const pool = new Map<string, UnitState>();
+  for (const pt of patternTiles('dualArc', unit.pos, i)) {
+    const u = occupant(state, pt.tile);
+    if (u && !u.ko && u.side !== unit.side) pool.set(u.id, u);
+  }
+  const units = [...pool.values()].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  return units.map(u => ({ unit: u, probability: 1 / units.length }));
+}
+export function colossalRingTiles(unit: UnitState): Vec[] { return patternTiles('ring8', unit.pos, 0).map(p => p.tile); }
+
+export function basicAttackHits(state: BattleState, unit: UnitState, target: Vec, modeId?: string): { tiles: Vec[]; hits: PatternHit[]; candidates?: { unit: UnitState; probability: number }[] } | null {
+  const p = attackMode(state, unit, modeId);
+  if (!p) return null;
   if (p.pattern === 'ranged') {
     const t = occupant(state, target);
     if (!t || t.side === unit.side) return null;
@@ -26,6 +41,11 @@ export function basicAttackHits(state: BattleState, unit: UnitState, target: Vec
   const i = aimDirection(p.pattern, unit.pos, target);
   if (i === null) return null;
   let tiles = patternTiles(p.pattern, unit.pos, i);
+  if (p.pattern === 'dualArc') {
+    const primary = occupant(state, target);
+    if (!primary || primary.side === unit.side) return null;
+    return { tiles: tiles.map(t => t.tile), hits: [{ unit: primary, ring: 0, tile: target }], candidates: dualWieldCandidates(state, unit, target) };
+  }
   if (p.pattern === 'line2') {
     // A wall stops the thrust.
     if (terrainAt(state, tiles[0]!.tile) === 'wall') return null;

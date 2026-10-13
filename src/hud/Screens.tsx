@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useGame, useModal } from './hooks';
 import { battleShareUrl } from '../game/share';
 
-const STARTERS = ['daggers', 'shield', 'polearm', 'two_handed'];
+import { availableWeapons } from '../rules/equipment';
 
 export function Menu() {
   return (
@@ -60,8 +60,8 @@ export function Setup() {
       <p className="lesson">Lesson: {enc.lesson}</p>
       <h3>Tubal-Cain offers you a weapon</h3>
       <div className="choice-grid">
-        {STARTERS.map((id) => {
-          const w = WEAPONS[id]!;
+        {availableWeapons(enc, config).map((w) => {
+          const id = w.id;
           return (
             <button key={id} className={`choice ${weaponId === id ? 'on' : ''}`} onClick={() => controller.setLoadout({ weaponId: id })} data-testid={`weapon-${id}`}>
               <div className="choice-name">{weaponId === id ? '✓ ' : ''}{w.name}</div>

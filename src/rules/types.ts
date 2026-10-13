@@ -18,7 +18,7 @@ export type Terrain = 'floor' | 'wall' | 'cover' | 'pit';
  * - adjacent: any one adjacent tile (bites, staff, javelin melee)
  * - ranged: single target within range with line of sight (bow, thrown, bolts)
  */
-export type PatternKind = 'cardinal' | 'pairCw' | 'line2' | 'arc5' | 'adjacent' | 'ranged';
+export type PatternKind = 'cardinal' | 'pairCw' | 'line2' | 'arc5' | 'adjacent' | 'ranged' | 'dualArc' | 'ring8';
 
 export interface AttackProfile {
   name: string;
@@ -37,10 +37,28 @@ export interface AttackProfile {
   ranged: boolean;
 }
 
+export type PlayerWeaponFamily = 'daggers' | 'shield' | 'polearm' | 'two_handed' | 'bow' | 'crossbow' | 'dual_wield' | 'javelin_shield' | 'colossal';
+export type WeaponFamily = PlayerWeaponFamily | 'natural' | 'staff';
+export interface FieldProvenance { owner: 'Aaron' | 'Drafts/09' | 'demo'; status: 'source' | 'tentative' | 'demo'; why: string }
+export interface Provenance { concept: 'source' | 'demo'; numbers: 'tentative' | 'demo'; why: string }
+export interface AttackMode extends AttackProfile { id: string; ammo?: 'bolt' }
+export interface WeaponInstance {
+  instanceId: string;
+  defId: string;
+  loaded: boolean;
+  skillReadyAt: Record<string, number>;
+}
 export interface WeaponDef {
+  fieldProvenance: { fields: Record<string, FieldProvenance>; attack: Record<string, FieldProvenance>; modes: Record<string, Record<string, FieldProvenance>> };
+  modes: readonly AttackMode[];
+  basicSkill: string | null;
+  proficiencySkill: string | null;
+  reloadAp?: number;
+  access?: 'normal' | 'soldier+savage' | 'soldier+rogue' | 'savage+rogue';
+  provenance: Provenance;
   id: string;
   name: string;
-  family: 'daggers' | 'shield' | 'polearm' | 'two_handed' | 'bow' | 'natural' | 'staff';
+  family: WeaponFamily;
   attack: AttackProfile;
   canEngage: boolean;
   engagement: number;
@@ -72,6 +90,10 @@ export type SkillKind =
   | 'sweep'; // boss: delayed effect over the encounter's sweep zone
 
 export interface SkillDef {
+  fieldProvenance: Record<string, FieldProvenance>;
+  modeId?: string;
+  consumesBolt?: boolean;
+  provenance: Provenance;
   id: string;
   name: string;
   kind: SkillKind;
@@ -111,6 +133,7 @@ export interface UnitTemplate {
   moveApPerTile?: number;
   dodge?: number;
   weapon: string;
+  secondaryWeapon?: string;
   skills?: string[];
   ai?: AiKind;
   footprint?: Vec[]; // relative offsets; default single tile
@@ -121,6 +144,13 @@ export interface UnitTemplate {
 }
 
 export interface UnitState {
+  carried: [WeaponInstance, WeaponInstance | null];
+  equippedSlot: 0 | 1;
+  personalSkills: { id: string; readyAt: number }[];
+  proficiencies: WeaponFamily[];
+  unlockedSpecialFamilies: WeaponFamily[];
+  reloadOwedSlot: 0 | 1 | null;
+  turnOrdinal: number;
   id: string;
   templateId: string;
   name: string;
@@ -221,13 +251,18 @@ export interface EncounterDef {
 }
 
 export interface Setup {
-  weaponId: string;
+  /** Legacy input accepted; weaponIds takes precedence. */
+  weaponId?: string;
+  weaponIds?: [string, string | null];
+  equippedSlot?: 0 | 1;
   armor: ArmorClass;
 }
 
 export type Outcome = 'ongoing' | 'victory' | 'defeat';
 
 export interface UnitTelemetry {
+  reloads: number;
+  swaps: number;
   turns: number;
   moveAp: number;
   actionAp: number;
@@ -244,6 +279,8 @@ export interface UnitTelemetry {
 }
 
 export interface BattleState {
+  /** Canonical starting loadout; never replaced by in-battle swaps. */
+  setup: { weaponIds: [string, string | null]; equippedSlot: 0 | 1; armor: ArmorClass };
   encounterId: string;
   seed: number;
   rng: Rng;
@@ -265,7 +302,9 @@ export interface BattleState {
 // ---- Actions ----
 export type Action =
   | { type: 'move'; unitId: string; to: Vec }
-  | { type: 'attack'; unitId: string; target: Vec }
+  | { type: 'attack'; unitId: string; target: Vec; modeId?: string }
+  | { type: 'reload'; unitId: string }
+  | { type: 'swapWeapon'; unitId: string; slot: 0 | 1 }
   | { type: 'skill'; unitId: string; skillId: string; target: Vec }
   | { type: 'endTurn'; unitId: string };
 
@@ -278,6 +317,8 @@ export interface ReactionResult {
 }
 
 export type GameEvent =
+  | { t: 'reload'; unitId: string; slot: 0 | 1; name: string; apCost: number }
+  | { t: 'swapWeapon'; unitId: string; slot: 0 | 1; oldName: string; newName: string; apCost: number }
   | { t: 'turnStart'; unitId: string; clock: number }
   | { t: 'move'; unitId: string; path: Vec[]; cost: number }
   | { t: 'disengage'; unitId: string; engagerId: string; chance: number; roll: number; held: boolean }
