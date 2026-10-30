@@ -1,0 +1,709 @@
+// 3D board rendering and animation (three.js). Reads the store; never changes rules state.
+// Draws the same view model and choreography as the 2D board; only presentation differs.
+
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import type { Vec } from '../rules/geometry';
+import type { BattleState, GameEvent, UnitState } from '../rules/types';
+import { controller, registerAnimator, unregisterAnimator, type Animator } from '../game/controller';
+import { store, type GameStore } from '../game/store';
+import { choreograph, type Ease, type Stage } from '../board/choreography';
+import { COLORS } from '../board/palette';
+import { boardView, unitCenter, type FillLayer, type LineLayer, type Pt } from '../board/view-model';
+import { GroundShape, PAWN_HEIGHT, PX, applyOpacity, makeToken, overlayMaterial, paintToken, type Token3D } from './meshes';
+import { EASE, TweenClock, yoyo } from './tweens';
+
+/** Reserved annotation lane above the board, as on the 2D board. */
+const LANE = 140;
+const UI_FONT = 'Inter, "Segoe UI", system-ui, sans-serif';
+const LAYER_HEIGHT: Record<FillLayer | LineLayer, number> = { zone: 0.012, telegraph: 0.016, overlay: 0.02, links: 0.024 };
+const LAYER_ORDER: Record<FillLayer | LineLayer, number> = { zone: 1, telegraph: 2, overlay: 3, links: 4 };
+/** Default camera direction: from the south (toward smaller y is "up"), 35° off vertical so pawns clear the walls. */
+const HOME_DIRECTION = new THREE.Vector3(0, Math.cos((35 * Math.PI) / 180), Math.sin((35 * Math.PI) / 180));
+const CLICK_SLOP = 5;
+
+interface LaneLabel {
+  el: HTMLElement;
+  anchor: Pt;
+  line: SVGLineElement;
+  /** Label bottom-center relative to the host, measured after layout. */
+  foot: { x: number; y: number };
+}
+
+interface FloatText {
+  el: HTMLElement;
+  at: THREE.Vector3;
+  rise: number;
+}
+
+export class ThreeBoard implements Animator, Stage {
+  private readonly renderer: THREE.WebGLRenderer;
+  private readonly scene = new THREE.Scene();
+  private readonly camera = new THREE.PerspectiveCamera(36, 1, 0.1, 400);
+  private readonly controls: OrbitControls;
+  private readonly sun = new THREE.DirectionalLight('#ffe2b8', 2.1);
+  private readonly mapGroup = new THREE.Group();
+  private readonly overlayGroup = new THREE.Group();
+  private readonly fxGroup = new THREE.Group();
+  private readonly tokenGroup = new THREE.Group();
+  private readonly lane: HTMLDivElement;
+  private readonly leaders: SVGSVGElement;
+  private readonly floatLayer: HTMLDivElement;
+  private readonly chrome: HTMLDivElement;
+  private readonly resizeObserver: ResizeObserver;
+  private readonly raycaster = new THREE.Raycaster();
+  private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private readonly clock = new TweenClock();
+
+  private tokens = new Map<string, Token3D>();
+  private labels: LaneLabel[] = [];
+  private floats = new Set<FloatText>();
+  private telegraphMaterials: { material: THREE.Material; base: number }[] = [];
+  private width = 1;
+  private height = 1;
+  private boardW = 1;
+  private boardH = 1;
+  private fitDistance = 20;
+  private shakeLeft = 0;
+  private shakeAmp = 0;
+  private elapsed = 0;
+  private last = performance.now();
+  private frame = 0;
+  private pressed: { x: number; y: number } | null = null;
+  private animating = false;
+  private animationJobs = new Set<() => void>();
+  private animationEpoch = 0;
+  private animationObjects = new Set<THREE.Object3D>();
+  private version = -1;
+  private unsub: () => void;
+  private destroyed = false;
+
+  constructor(private readonly host: HTMLElement) {
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    const canvas = this.renderer.domElement;
+    canvas.className = 'board3d-canvas';
+    host.append(canvas);
+
+    this.leaders = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    this.leaders.classList.add('board3d-leaders');
+    this.lane = el('div', 'board3d-lane');
+    this.floatLayer = el('div', 'board3d-floats');
+    this.chrome = el('div', 'board3d-chrome');
+    const hint = el('span', 'board3d-hint');
+    hint.textContent = 'Drag to orbit · wheel to zoom';
+    const reset = el('button', 'board3d-reset');
+    reset.textContent = 'Reset view';
+    reset.dataset.testid = 'board3d-reset';
+    reset.addEventListener('click', () => this.resetView());
+    this.chrome.append(hint, reset);
+    host.append(this.leaders, this.lane, this.floatLayer, this.chrome);
+
+    this.scene.background = new THREE.Color(COLORS.bg);
+    this.scene.fog = new THREE.Fog(COLORS.bg, 40, 90);
+    this.scene.add(new THREE.HemisphereLight('#c9b79a', '#1a120c', 1.15));
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.bias = -0.0004;
+    this.sun.shadow.normalBias = 0.02;
+    this.scene.add(this.sun, this.sun.target);
+    const rim = new THREE.DirectionalLight('#7fa8ff', 0.35);
+    rim.position.set(-10, 6, -12);
+    this.scene.add(rim);
+    this.overlayGroup.renderOrder = 1;
+    this.scene.add(this.mapGroup, this.overlayGroup, this.tokenGroup, this.fxGroup);
+
+    this.controls = new OrbitControls(this.camera, canvas);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.12;
+    this.controls.enablePan = false;
+    this.controls.minPolarAngle = 0.08;
+    this.controls.maxPolarAngle = 1.2;
+    this.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: null };
+    this.controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_ROTATE };
+
+    canvas.addEventListener('pointermove', this.onPointerMove);
+    canvas.addEventListener('pointerdown', this.onPointerDown);
+    canvas.addEventListener('pointerup', this.onPointerUp);
+    canvas.addEventListener('pointerleave', this.onPointerLeave);
+    canvas.addEventListener('contextmenu', this.onContextMenu);
+
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(host);
+
+    this.unsub = store.subscribe((s, prev) => {
+      // Never let a rendering problem propagate into store.setState callers.
+      try {
+        this.onStore(s, prev);
+      } catch (err) {
+        console.error('3D board refresh failed', err);
+      }
+    });
+    registerAnimator(this);
+    this.version = store.getState().boardVersion;
+
+    // Test hooks shared with the 2D board: canvas-relative pixel center of a tile; label/unit boxes.
+    const w = window as unknown as { __soc?: Record<string, unknown> };
+    if (w.__soc) {
+      w.__soc.tileCenter = this.tileCenterHook;
+      w.__soc.labelBounds = this.labelBoundsHook;
+    }
+
+    this.resize();
+    this.rebuild();
+    this.frame = requestAnimationFrame(this.loop);
+  }
+
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.cancel();
+    this.unsub();
+    unregisterAnimator(this);
+    cancelAnimationFrame(this.frame);
+    this.resizeObserver.disconnect();
+    const w = window as unknown as { __soc?: Record<string, unknown> };
+    if (w.__soc?.tileCenter === this.tileCenterHook) delete w.__soc.tileCenter;
+    if (w.__soc?.labelBounds === this.labelBoundsHook) delete w.__soc.labelBounds;
+    this.controls.dispose();
+    disposeTree(this.scene);
+    this.renderer.dispose();
+    this.renderer.forceContextLoss();
+    this.renderer.domElement.remove();
+    this.leaders.remove();
+    this.lane.remove();
+    this.floatLayer.remove();
+    this.chrome.remove();
+  }
+
+  // ---------------- Layout ----------------
+
+  private battle(): BattleState | null {
+    return store.getState().battle;
+  }
+
+  /** Tile-space point to world space. */
+  private world(p: Pt, height = 0): THREE.Vector3 {
+    return new THREE.Vector3(p.x - this.boardW / 2, height, p.y - this.boardH / 2);
+  }
+
+  /** World point to host-relative CSS pixels. */
+  private screen(v: THREE.Vector3): { x: number; y: number } {
+    const p = v.clone().project(this.camera);
+    return { x: ((p.x + 1) / 2) * this.width, y: ((1 - p.y) / 2) * this.height };
+  }
+
+  private tileCenterHook = (x: number, y: number) => this.screen(this.world({ x: x + 0.5, y: y + 0.5 }));
+
+  private labelBoundsHook = () => {
+    const origin = this.host.getBoundingClientRect();
+    const box = (r: DOMRect) => ({ x: r.x - origin.x, y: r.y - origin.y, width: r.width, height: r.height });
+    return {
+      labels: this.labels.map((l) => ({ text: l.el.textContent ?? '', ...box(l.el.getBoundingClientRect()) })),
+      units: [...this.tokens.values()].map((t) => {
+        const bounds = new THREE.Box3().setFromObject(t.root);
+        const corners = [0, 1].flatMap((i) => [0, 1].flatMap((j) => [0, 1].map((k) => this.screen(new THREE.Vector3(i ? bounds.max.x : bounds.min.x, j ? bounds.max.y : bounds.min.y, k ? bounds.max.z : bounds.min.z)))));
+        const xs = corners.map((c) => c.x);
+        const ys = corners.map((c) => c.y);
+        return { id: t.unitId, x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+      }),
+    };
+  };
+
+  private resize(): void {
+    this.width = Math.max(1, this.host.clientWidth);
+    this.height = Math.max(1, this.host.clientHeight);
+    this.renderer.setSize(this.width, this.height);
+    this.leaders.setAttribute('viewBox', `0 0 ${this.width} ${this.height}`);
+    this.camera.aspect = this.width / this.height;
+    this.applyViewOffset(0, 0);
+    const dir = this.camera.position.clone().sub(this.controls.target);
+    this.fit(dir.lengthSq() > 0 ? dir.normalize() : HOME_DIRECTION);
+    this.measureLabels();
+  }
+
+  /** Shift the image down by half the lane so the board centers in the space below it. */
+  private applyViewOffset(dx: number, dy: number): void {
+    this.camera.setViewOffset(this.width, this.height, dx, -Math.min(LANE, this.height * 0.3) / 2 + dy, this.width, this.height);
+    this.camera.updateProjectionMatrix();
+  }
+
+  /** Place the camera along `dir` at the closest distance that frames the whole board below the lane. */
+  private fit(dir: THREE.Vector3): void {
+    const hw = this.boardW / 2 + 0.3;
+    const hh = this.boardH / 2 + 0.3;
+    const corners = [-hw, hw].flatMap((x) => [-hh, hh].flatMap((z) => [0, 1.6].map((y) => new THREE.Vector3(x, y, z))));
+    const lane = Math.min(LANE, this.height * 0.3);
+    const top = 1 - (2 * (lane + 8)) / this.height;
+    const fits = (d: number) => {
+      this.camera.position.copy(dir).multiplyScalar(d);
+      this.camera.lookAt(0, 0, 0);
+      this.camera.updateMatrixWorld();
+      return corners.every((c) => {
+        const p = c.clone().project(this.camera);
+        return p.z < 1 && Math.abs(p.x) <= 0.95 && p.y <= top && p.y >= -0.93;
+      });
+    };
+    let lo = 1;
+    let hi = 300;
+    for (let i = 0; i < 28; i++) {
+      const mid = (lo + hi) / 2;
+      if (fits(mid)) hi = mid;
+      else lo = mid;
+    }
+    this.fitDistance = hi;
+    this.camera.position.copy(dir).multiplyScalar(hi);
+    this.controls.target.set(0, 0, 0);
+    this.controls.minDistance = hi * 0.35;
+    this.controls.maxDistance = hi * 2.2;
+    this.controls.update();
+  }
+
+  private resetView(): void {
+    this.fit(HOME_DIRECTION.clone());
+  }
+
+  private rebuild(): void {
+    const b = this.battle();
+    disposeTree(this.tokenGroup);
+    disposeTree(this.mapGroup);
+    this.tokens.clear();
+    if (!b) return;
+    const sizeChanged = b.map.width !== this.boardW || b.map.height !== this.boardH;
+    this.boardW = b.map.width;
+    this.boardH = b.map.height;
+    this.buildMap(b);
+    for (const u of b.units) {
+      const tok = makeToken(u);
+      this.tokens.set(u.id, tok);
+      this.tokenGroup.add(tok.root);
+    }
+    const span = Math.max(this.boardW, this.boardH);
+    this.sun.position.set(-span * 0.45, span * 0.9, span * 0.55);
+    const cam = this.sun.shadow.camera;
+    cam.left = cam.bottom = -span * 0.8;
+    cam.right = cam.top = span * 0.8;
+    cam.near = 0.5;
+    cam.far = span * 3;
+    cam.updateProjectionMatrix();
+    if (sizeChanged) this.resetView();
+    this.refresh();
+  }
+
+  private onStore(s: GameStore, prev: GameStore): void {
+    if (s.boardVersion !== this.version) {
+      this.version = s.boardVersion;
+      this.rebuild();
+      return;
+    }
+    if (s.battle !== prev.battle || s.hoverTile !== prev.hoverTile || s.hoverUnitId !== prev.hoverUnitId || s.mode !== prev.mode || s.busy !== prev.busy) {
+      this.refresh();
+    }
+  }
+
+  // ---------------- Static map ----------------
+
+  private buildMap(b: BattleState): void {
+    const enc = store.getState().encounterId;
+    const floor = new THREE.Color(COLORS.floor[enc as keyof typeof COLORS.floor] ?? COLORS.floor.default);
+    const W = b.map.width;
+    const H = b.map.height;
+
+    const slab = new THREE.Mesh(new RoundedBoxGeometry(W + 0.7, 0.5, H + 0.7, 3, 0.12), new THREE.MeshStandardMaterial({ color: '#1d1712', roughness: 0.95 }));
+    slab.position.y = -0.33;
+    slab.receiveShadow = true;
+    const underfloor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: '#0f0c0a', roughness: 1 }));
+    underfloor.rotation.x = -Math.PI / 2;
+    underfloor.position.y = -0.6;
+    underfloor.receiveShadow = true;
+    this.mapGroup.add(slab, underfloor);
+
+    const kinds = { floor: [] as Vec[], wall: [] as Vec[], cover: [] as Vec[] };
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const terr = b.map.tiles[y * W + x];
+        if (terr === 'wall') kinds.wall.push({ x, y });
+        else {
+          kinds.floor.push({ x, y });
+          if (terr === 'cover') kinds.cover.push({ x, y });
+        }
+      }
+
+    const m = new THREE.Matrix4();
+    const color = new THREE.Color();
+    const white = new THREE.Color('#ffffff');
+    const instanced = (geometry: THREE.BufferGeometry, material: THREE.Material, tiles: Vec[], y: number, tint: (p: Vec) => THREE.Color) => {
+      if (!tiles.length) return;
+      const mesh = new THREE.InstancedMesh(geometry, material, tiles.length);
+      tiles.forEach((p, i) => {
+        m.makeTranslation(p.x + 0.5 - W / 2, y, p.y + 0.5 - H / 2);
+        mesh.setMatrixAt(i, m);
+        mesh.setColorAt(i, tint(p));
+      });
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.mapGroup.add(mesh);
+    };
+    // Floor flagstones with grout gaps; same per-tile shade pattern as the 2D board.
+    instanced(new RoundedBoxGeometry(0.95, 0.12, 0.95, 2, 0.03), new THREE.MeshStandardMaterial({ roughness: 0.92 }), kinds.floor, -0.06, (p) =>
+      color.copy(floor).lerp(white, ((p.x * 7 + p.y * 13) % 5) * 0.012),
+    );
+    const wall = new THREE.Color(COLORS.wall);
+    // Waist-high walls: tall enough to read as walls, low enough that pawns behind them stay visible.
+    instanced(new RoundedBoxGeometry(1, 0.42, 1, 2, 0.04), new THREE.MeshStandardMaterial({ roughness: 0.85 }), kinds.wall, 0.15, (p) =>
+      color.copy(wall).lerp(white, ((p.x * 5 + p.y * 3) % 4) * 0.02),
+    );
+    instanced(new RoundedBoxGeometry(0.76, 0.36, 0.62, 3, 0.07), new THREE.MeshStandardMaterial({ roughness: 0.7 }), kinds.cover, 0.18, () => color.set(COLORS.cover));
+    const border = new GroundShape();
+    border.frame(-0.06, -0.06, W + 0.12, H + 0.12, 0.05);
+    const frame = border.mesh(overlayMaterial(COLORS.cover, 0.6), this.world({ x: 0, y: 0 }), 0.002);
+    if (frame) this.mapGroup.add(frame);
+  }
+
+  // ---------------- Overlays ----------------
+
+  refresh(): void {
+    const s = store.getState();
+    disposeTree(this.overlayGroup);
+    this.telegraphMaterials = [];
+    this.lane.replaceChildren();
+    this.leaders.replaceChildren();
+    this.labels = [];
+    if (!s.battle) return;
+    const view = boardView(s);
+
+    if (!this.animating) {
+      for (const tv of view.tokens) {
+        const tok = this.tokens.get(tv.unit.id);
+        if (!tok) continue;
+        tok.root.position.copy(this.world(unitCenter(tv.unit)));
+        tok.root.scale.setScalar(1);
+        tok.flash = 1;
+        tok.badge = tv.badge;
+        paintToken(tok, tv.unit, tv.active, tv.hovered);
+      }
+    }
+
+    const origin = this.world({ x: 0, y: 0 });
+    const add = (shape: GroundShape, layer: FillLayer | LineLayer, color: string, alpha: number) => {
+      const material = overlayMaterial(color, alpha);
+      const mesh = shape.mesh(material, origin, LAYER_HEIGHT[layer]);
+      if (!mesh) {
+        material.dispose();
+        return;
+      }
+      mesh.renderOrder = LAYER_ORDER[layer];
+      this.overlayGroup.add(mesh);
+      if (layer === 'telegraph') this.telegraphMaterials.push({ material, base: alpha });
+    };
+    for (const f of view.fills) {
+      const shape = new GroundShape();
+      shape.tiles(f.tiles);
+      add(shape, f.layer, f.color, f.alpha);
+      if (f.stroke) {
+        const stroke = new GroundShape();
+        stroke.tileStrokes(f.tiles, 2 * PX);
+        add(stroke, f.layer, f.stroke, 0.9);
+      }
+    }
+    for (const o of view.outlines) {
+      const shape = new GroundShape();
+      if (o.dashed) shape.dashedRect(o.x, o.y, o.w, o.h, o.width * PX);
+      else shape.frame(o.x + PX, o.y + PX, o.w - 2 * PX, o.h - 2 * PX, o.width * PX);
+      add(shape, o.layer, o.color, o.alpha);
+    }
+    for (const seg of view.segments) {
+      const shape = new GroundShape();
+      shape.ribbon(seg.from, seg.to, seg.width * PX * 1.5);
+      add(shape, seg.layer, seg.color, seg.alpha);
+    }
+
+    for (const l of view.labels) {
+      const label = el('span', 'board3d-label');
+      label.textContent = l.text;
+      label.style.color = l.color;
+      label.style.fontSize = `${Math.max(10, Math.round(56 * l.size))}px`;
+      if (l.bg) label.style.background = l.bg;
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      this.lane.append(label);
+      this.leaders.append(line);
+      this.labels.push({ el: label, anchor: l.anchor, line, foot: { x: 0, y: 0 } });
+    }
+    this.measureLabels();
+  }
+
+  /** Read label geometry once per layout change; leaders then follow the camera every frame. */
+  private measureLabels(): void {
+    for (const l of this.labels) l.foot = { x: l.el.offsetLeft + l.el.offsetWidth / 2, y: l.el.offsetTop + l.el.offsetHeight };
+  }
+
+  // ---------------- Input ----------------
+
+  private pickTile(e: PointerEvent): Vec | null {
+    const b = this.battle();
+    if (!b) return null;
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    // A unit's body stands above its tiles: resolve picks on it to the footprint tile under the hit.
+    const pickables = [...this.tokens.values()].flatMap((t) => t.pickables);
+    const hit = this.raycaster.intersectObjects(pickables, false)[0];
+    if (hit) {
+      let o: THREE.Object3D | null = hit.object;
+      while (o && o.userData.unitId === undefined) o = o.parent;
+      const id: unknown = o?.userData.unitId;
+      const unit = b.units.find((u) => u.id === id);
+      if (unit && !unit.ko) {
+        const tx = Math.floor(hit.point.x + this.boardW / 2);
+        const ty = Math.floor(hit.point.z + this.boardH / 2);
+        const tiles = unit.footprint.map((f) => ({ x: unit.pos.x + f.x, y: unit.pos.y + f.y }));
+        return tiles.reduce((best, t) => (Math.hypot(t.x - tx, t.y - ty) < Math.hypot(best.x - tx, best.y - ty) ? t : best));
+      }
+    }
+    const point = new THREE.Vector3();
+    if (!this.raycaster.ray.intersectPlane(this.ground, point)) return null;
+    const x = Math.floor(point.x + this.boardW / 2);
+    const y = Math.floor(point.z + this.boardH / 2);
+    if (x < 0 || y < 0 || x >= b.map.width || y >= b.map.height) return null;
+    return { x, y };
+  }
+
+  private onPointerMove = (e: PointerEvent) => {
+    controller.hover(this.pickTile(e));
+  };
+
+  private onPointerDown = (e: PointerEvent) => {
+    if (e.button === 2) {
+      controller.setMode({ kind: 'move' });
+      return;
+    }
+    if (e.button === 0) this.pressed = { x: e.clientX, y: e.clientY };
+  };
+
+  private onPointerUp = (e: PointerEvent) => {
+    const start = this.pressed;
+    this.pressed = null;
+    // A drag orbits the camera; only a press-and-release in place commits a tile.
+    if (e.button !== 0 || !start || Math.hypot(e.clientX - start.x, e.clientY - start.y) > CLICK_SLOP) return;
+    const t = this.pickTile(e);
+    if (t) void controller.clickTile(t);
+  };
+
+  private onPointerLeave = () => {
+    this.pressed = null;
+    controller.hover(null);
+  };
+
+  private onContextMenu = (e: Event) => e.preventDefault();
+
+  // ---------------- Frame loop ----------------
+
+  private loop = (now: number) => {
+    this.frame = requestAnimationFrame(this.loop);
+    const dt = Math.min(100, now - this.last);
+    this.last = now;
+    this.elapsed += dt;
+    this.clock.tick(dt);
+
+    // Telegraph pulse: 1 → 0.55 → 1 every 1.4 s, as on the 2D board.
+    const pulse = 0.775 + 0.225 * Math.cos((this.elapsed / 700) * Math.PI);
+    for (const t of this.telegraphMaterials) t.material.opacity = t.base * pulse;
+
+    let dx = 0;
+    let dy = 0;
+    if (this.shakeLeft > 0) {
+      this.shakeLeft -= dt;
+      dx = (Math.random() * 2 - 1) * this.shakeAmp * this.width;
+      dy = (Math.random() * 2 - 1) * this.shakeAmp * this.height;
+    }
+    this.applyViewOffset(dx, dy);
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+
+    for (const l of this.labels) {
+      const a = this.screen(this.world(l.anchor, 0.03));
+      l.line.setAttribute('x1', `${l.foot.x}`);
+      l.line.setAttribute('y1', `${l.foot.y}`);
+      l.line.setAttribute('x2', `${a.x}`);
+      l.line.setAttribute('y2', `${a.y}`);
+    }
+    for (const f of this.floats) {
+      const p = this.screen(f.at.clone().setY(f.at.y + f.rise));
+      f.el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`;
+    }
+  };
+
+  // ---------------- Animation ----------------
+
+  cancel(): void {
+    this.animationEpoch += 1;
+    for (const cancel of [...this.animationJobs]) cancel();
+    for (const object of this.animationObjects) {
+      this.fxGroup.remove(object);
+      disposeTree(object);
+    }
+    this.animationObjects.clear();
+    for (const f of this.floats) f.el.remove();
+    this.floats.clear();
+    this.animating = false;
+  }
+
+  private animationJob(start: (done: () => void) => () => void): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const cancel = () => {
+        stop();
+        this.animationJobs.delete(cancel);
+        reject(new Error('Animation cancelled'));
+      };
+      const stop = start(() => {
+        this.animationJobs.delete(cancel);
+        resolve();
+      });
+      this.animationJobs.add(cancel);
+    });
+  }
+
+  private tween(ms: number, update: (p: number) => void): Promise<void> {
+    return this.animationJob((done) => this.clock.run(ms, update, done));
+  }
+
+  wait(ms: number): Promise<void> {
+    return this.tween(ms, () => {});
+  }
+
+  float(at: Pt, text: string, color: string, big = false): void {
+    const node = el('div', 'board3d-float');
+    node.textContent = text;
+    node.style.color = color;
+    node.style.fontSize = `${Math.round(56 * (big ? 0.42 : 0.3))}px`;
+    node.style.fontFamily = UI_FONT;
+    this.floatLayer.append(node);
+    // Rise from above the figure: pawns are short, the boss block is tall.
+    const ground = this.world(at);
+    const overBoss = [...this.tokens.values()].some((t) => t.big && t.root.position.distanceTo(ground) < 1.2);
+    const f: FloatText = { el: node, at: ground.setY(overBoss ? 2 : PAWN_HEIGHT + 0.2), rise: 0 };
+    this.floats.add(f);
+    this.clock.run(
+      1100,
+      (p) => {
+        const k = EASE.cubic(p);
+        f.rise = 0.7 * k;
+        node.style.opacity = `${1 - k}`;
+      },
+      () => {
+        node.remove();
+        this.floats.delete(f);
+      },
+    );
+  }
+
+  async moveToken(id: string, to: Pt, ms: number, ease: Ease): Promise<void> {
+    const tok = this.tokens.get(id);
+    if (!tok) return;
+    const from = tok.root.position.clone();
+    const dest = this.world(to);
+    const fn = EASE[ease];
+    await this.tween(ms, (p) => {
+      tok.root.position.lerpVectors(from, dest, fn(p));
+      // Small hop per step so walking reads as movement, not sliding.
+      tok.root.position.y = (tok.big ? 0.04 : 0.1) * 4 * p * (1 - p);
+    });
+  }
+
+  async lungeToken(id: string, toward: Pt, ms: number): Promise<void> {
+    const tok = this.tokens.get(id);
+    if (!tok) return;
+    const from = tok.root.position.clone();
+    const dest = this.world(toward);
+    await this.tween(ms * 2, (p) => tok.root.position.lerpVectors(from, dest, EASE.quad(yoyo(p, 2))));
+  }
+
+  async pulseToken(id: string, scale: number, ms: number): Promise<void> {
+    const tok = this.tokens.get(id);
+    if (tok) await this.tween(ms * 2, (p) => tok.root.scale.setScalar(1 + (scale - 1) * yoyo(p, 2)));
+  }
+
+  async blinkToken(id: string, ms: number): Promise<void> {
+    const tok = this.tokens.get(id);
+    if (!tok) return;
+    await this.tween(ms * 4, (p) => {
+      tok.flash = p >= 1 ? 1 : 0.35 + 0.65 * yoyo(p, 4);
+      applyOpacity(tok);
+    });
+  }
+
+  async fadeToken(id: string, alpha: number, ms: number): Promise<void> {
+    const tok = this.tokens.get(id);
+    if (!tok) return;
+    const from = tok.alpha;
+    await this.tween(ms, (p) => {
+      tok.alpha = from + (alpha - from) * p;
+      applyOpacity(tok);
+    });
+  }
+
+  paintToken(id: string, unit: UnitState, active: boolean): void {
+    const tok = this.tokens.get(id);
+    if (tok) paintToken(tok, unit, active, false);
+  }
+
+  async flashTiles(tiles: Vec[], color: string, alpha: number, ms: number): Promise<void> {
+    const shape = new GroundShape();
+    shape.tiles(tiles);
+    const material = overlayMaterial(color, alpha);
+    const mesh = shape.mesh(material, this.world({ x: 0, y: 0 }), 0.03);
+    if (!mesh) return;
+    mesh.renderOrder = 10;
+    this.fxGroup.add(mesh);
+    this.animationObjects.add(mesh);
+    await this.tween(ms, (p) => (material.opacity = alpha * (1 - p)));
+    this.animationObjects.delete(mesh);
+    this.fxGroup.remove(mesh);
+    disposeTree(mesh);
+  }
+
+  shake(ms: number, intensity: number): void {
+    this.shakeLeft = ms;
+    this.shakeAmp = intensity;
+  }
+
+  async play(events: GameEvent[], before: BattleState, after: BattleState, speed: number): Promise<void> {
+    if (this.destroyed) return;
+    const epoch = this.animationEpoch;
+    this.animating = true;
+    try {
+      await choreograph(this, events, before, after, speed);
+    } catch (err) {
+      if (epoch === this.animationEpoch) throw err;
+    } finally {
+      if (epoch === this.animationEpoch) this.animating = false;
+    }
+  }
+}
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  node.className = className;
+  return node;
+}
+
+/** Dispose every geometry, material and texture under `root` and detach its children. */
+function disposeTree(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    if (o instanceof THREE.InstancedMesh) o.dispose();
+    const mesh = o as THREE.Mesh;
+    // Sprites share one module-level quad geometry; never dispose it.
+    if (!(o instanceof THREE.Sprite)) mesh.geometry?.dispose();
+    const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+    for (const m of materials) {
+      (m as THREE.MeshBasicMaterial).map?.dispose();
+      m.dispose();
+    }
+  });
+  root.clear();
+}

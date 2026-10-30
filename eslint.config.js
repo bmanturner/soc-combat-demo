@@ -3,7 +3,7 @@ import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
-const browserOnly = ['phaser', 'react', 'react-dom', 'react-dom/client', 'zustand', 'zustand/*'];
+const browserOnly = ['phaser', 'three', 'three/*', 'react', 'react-dom', 'react-dom/client', 'zustand', 'zustand/*'];
 
 export default tseslint.config(
   { ignores: ['dist', 'node_modules', 'playwright-report', 'test-results'] },

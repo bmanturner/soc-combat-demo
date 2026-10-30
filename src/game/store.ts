@@ -1,4 +1,4 @@
-// App state shared by the Phaser board and the React HUD (vanilla Zustand store: no React dependency).
+// App state shared by the boards and the React HUD (vanilla Zustand store: no React dependency).
 
 import { createStore } from 'zustand/vanilla';
 import { DEFAULT_CONFIG, type RulesConfig } from '../rules/config';
@@ -7,6 +7,17 @@ import type { Action, ArmorClass, BattleState } from '../rules/types';
 
 export type Mode = { kind: 'move' } | { kind: 'attack'; modeId?: string } | { kind: 'skill'; skillId: string };
 export type ActionHover = 'reload' | 'swap' | null;
+export type BoardViewKind = '2d' | '3d';
+
+export const BOARD_VIEW_KEY = 'soc.boardView';
+
+function savedBoardView(): BoardViewKind {
+  try {
+    return globalThis.localStorage?.getItem(BOARD_VIEW_KEY) === '3d' ? '3d' : '2d';
+  } catch {
+    return '2d';
+  }
+}
 
 export interface LogLine {
   id: number;
@@ -45,6 +56,8 @@ export interface GameStore {
   boardVersion: number;
   /** Unique fight identity, independent of seed, time and board redraws. */
   battleGeneration: number;
+  /** Board renderer: Phaser 2D or three.js 3D. Presentation only; not part of share links. */
+  boardView: BoardViewKind;
 }
 
 export const store = createStore<GameStore>(() => ({
@@ -71,6 +84,7 @@ export const store = createStore<GameStore>(() => ({
   toast: null,
   boardVersion: 0,
   battleGeneration: 0,
+  boardView: savedBoardView(),
 }));
 
 let toastSeq = 0;

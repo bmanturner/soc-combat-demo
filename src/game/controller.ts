@@ -11,7 +11,7 @@ import { attackOptions, previewAttack, previewSkill, reachable } from '../rules/
 import { occupant, unitById } from '../rules/state';
 import type { Action, BattleState, GameEvent } from '../rules/types';
 import { shareUrl } from './share';
-import { showToast, store, type LogLine, type Mode } from './store';
+import { BOARD_VIEW_KEY, showToast, store, type BoardViewKind, type LogLine, type Mode } from './store';
 
 export interface Animator {
   play(events: GameEvent[], before: BattleState, after: BattleState, speed: number): Promise<void>;
@@ -247,6 +247,16 @@ export const controller = {
 
   setSpeed(speed: number): void {
     store.setState({ speed });
+  },
+
+  /** Switch board renderer; a pending animation is cancelled by the outgoing board and the action still commits. */
+  setBoardView(boardView: BoardViewKind): void {
+    store.setState({ boardView });
+    try {
+      localStorage.setItem(BOARD_VIEW_KEY, boardView);
+    } catch {
+      // Storage may be unavailable (private mode); the choice still applies for this session.
+    }
   },
 
   setBotParty(on: boolean): void {

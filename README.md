@@ -11,6 +11,7 @@ A browser sandbox for Aaron to play and tune AP-timeline tactics before a full e
 - **Shared previews:** movement/path engagement risks, attack/skill damage and reactions, reload/swap costs, next-turn ghosts and delayed-effect escape outlook use the same rules as execution. They are current-board estimates, not promises about future AI moves or random outcomes. Delayed skills default to no reactions but can explicitly author exceptions.
 - **Rules tuning:** grouped controls cover timeline, movement, engagement, flanking, reactions, damage, boss behavior, Weapons, **Weapon tuning** and **Enemy tuning**. Badges distinguish *Aaron's rule*, *Tentative math* and *Demo default*, with rationale. Weapon/skill/unit/armor data separates sourced concepts from tentative/demo numbers. Not every design question is an exposed control; changing fight rules restarts the fight.
 - **Feedback:** result reports include telemetry, config changes and a setup link. Share links reproduce **encounter, two-slot loadout, seed and rules — not an action replay**. The same seed only reproduces a fight when the action sequence also matches. Human play and expert/novice bot policies are distinct balance samples.
+- **2D or 3D board:** the top-bar **2D / 3D** toggle switches between the Phaser board and a three.js board (remembered per browser, not part of share links). Both draw the same overlays, labels and event choreography; 3D adds orbit (drag) and zoom (wheel). A drag never commits; click in place to act.
 
 ## Run and verify
 
@@ -44,7 +45,8 @@ Encounter IDs are `granary`, `wolves`, `cultists`, `nephilim`. `trials` is seeds
 | `src/rules/` | Pure deterministic TypeScript core: `applyAction(state, action) → {state, events}`. No UI, DOM or `Math.random`; golden and fast-check tests. |
 | `src/content/` | Typed gear, skills, unit templates, provenance and encounter data. |
 | `src/game/` | Shared Zustand store, controller/AI pacing, share links and preview helpers. |
-| `src/board/` | Phaser scene, overlays and event-driven animations. |
+| `src/board/` | Renderer-neutral `view-model.ts` (what overlays/labels to show) and `choreography.ts` (how events animate), plus the Phaser 2D scene. |
+| `src/board3d/` | three.js 3D board: same view model and choreography, DOM annotation lane and floats, lazy-loaded on first use. |
 | `src/hud/` | React timeline, actions, threats, log, settings and screens. |
 | `tools/`, `e2e/` | Sim/trace/balance/report/screenshot utilities and Playwright specs. |
 | `notes/rules/` | Earlier shared-rules corrections and their regression evidence. |
@@ -61,6 +63,7 @@ Phase notes record the revision/experiment they tested, not an evergreen guarant
 | Choice | Why |
 |---|---|
 | **Phaser 4** (board) | A full 2D framework supplies tweens, input, cameras, scaling and WebGL. PixiJS alone would require rebuilding those pieces; Godot's web export is heavier for a quick shared link; boardgame.io solves multiplayer we do not need. |
+| **three.js** (3D board) | Optional alternate renderer for spatial readability. It implements the same `Stage` primitives as Phaser, so previews and animations cannot drift between views; it loads as a separate chunk only when 3D is selected. |
 | **React 19 + Zustand** (HUD) | Dense forms, settings, timelines and tables suit the DOM. A vanilla Zustand store is shared by Phaser and React without either owning it. |
 | **Pure TypeScript rules core** | Seeded mulberry32, serializable state and browser-free tests. A future engine port can use the golden tests as an executable spec. |
 | **Vite 8, Vitest 5, fast-check, Playwright** | Fast dev/build, unit/property tests and real-browser e2e. TypeScript 6 is the project's supported compiler/tooling baseline. |

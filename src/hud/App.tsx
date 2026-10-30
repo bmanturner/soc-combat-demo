@@ -16,6 +16,7 @@ function TopBar() {
   const speed = useGame((s) => s.speed);
   const bot = useGame((s) => s.botParty);
   const seed = useGame((s) => s.seed);
+  const view = useGame((s) => s.boardView);
   const enc = encounterById(encounterId);
   return (
     <header className="topbar">
@@ -24,6 +25,13 @@ function TopBar() {
         <b>{enc.name}</b> <span className="muted">{enc.subtitle} · seed {seed}</span>
       </div>
       <div className="tb-right">
+        <div className="view-toggle" role="group" aria-label="Board view">
+          {(['2d', '3d'] as const).map((v) => (
+            <button key={v} className={view === v ? 'on' : ''} aria-pressed={view === v} onClick={() => controller.setBoardView(v)} data-testid={`view-${v}`} title={v === '3d' ? 'three.js 3D board' : 'Phaser 2D board'}>
+              {v.toUpperCase()}
+            </button>
+          ))}
+        </div>
         <label title="Animation speed">
           Speed
           <select value={speed} onChange={(e) => controller.setSpeed(Number(e.target.value))}>
