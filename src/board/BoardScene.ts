@@ -22,9 +22,38 @@ interface Token {
   h: number;
 }
 
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 const FONT = 'Georgia, "Times New Roman", serif';
 const UI_FONT = 'Inter, "Segoe UI", system-ui, sans-serif';
 const EASES: Record<Ease, string> = { linear: 'Linear', sine: 'Sine.easeInOut', quad: 'Quad.easeOut', back: 'Back.easeOut' };
+
+/** Fraction along p→q (0..1) at which the segment first enters any rectangle; 1 when it enters none. */
+function firstEntry(p: Pt, q: Pt, rects: Rect[]): number {
+  let best = 1;
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  for (const r of rects) {
+    let t0 = 0;
+    let t1 = 1;
+    const clip = (d: number, lo: number, hi: number, origin: number): boolean => {
+      if (d === 0) return origin >= lo && origin <= hi;
+      let a = (lo - origin) / d;
+      let b = (hi - origin) / d;
+      if (a > b) [a, b] = [b, a];
+      t0 = Math.max(t0, a);
+      t1 = Math.min(t1, b);
+      return t0 <= t1;
+    };
+    if (clip(dx, r.x - 2, r.x + r.w + 2, p.x) && clip(dy, r.y - 2, r.y + r.h + 2, p.y)) best = Math.min(best, t0);
+  }
+  return best;
+}
 
 export class BoardScene extends Phaser.Scene implements Animator, Stage {
   private tile = 56;
@@ -33,6 +62,8 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
   private mapGfx!: Phaser.GameObjects.Graphics;
   private layers!: Record<FillLayer | LineLayer, Phaser.GameObjects.Graphics>;
   private labels: Phaser.GameObjects.Text[] = [];
+  private laneLabels: Phaser.GameObjects.Text[] = [];
+  private occupied: Rect[] = [];
   private tokens = new Map<string, Token>();
   private animating = false;
   private animationJobs = new Set<() => void>();
@@ -121,10 +152,12 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
   private layout(b: BattleState): void {
     const w = this.scale.width;
     const h = this.scale.height;
-    this.tile = Math.max(28, Math.floor(Math.min((w - 24) / b.map.width, (h - 164) / b.map.height)));
-    this.tile = Math.min(this.tile, 84);
+    // Labels sit beside their tiles; the top strip is only an overflow lane.
+    const lane = 48;
+    this.tile = Math.max(28, Math.floor(Math.min((w - 24) / b.map.width, (h - lane - 12) / b.map.height)));
+    this.tile = Math.min(this.tile, 132);
     this.ox = Math.floor((w - this.tile * b.map.width) / 2);
-    this.oy = 140 + Math.floor((h - 140 - this.tile * b.map.height) / 2);
+    this.oy = lane + Math.max(0, Math.floor((h - lane - 12 - this.tile * b.map.height) / 2));
   }
 
   private rebuild(): void {
@@ -269,21 +302,59 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
     }
   }
 
+  /**
+   * Place a label beside its anchor tile, clear of tokens, other labels and the canvas edge.
+   * Only when no nearby spot exists does it go to the top lane, with a leader line to the anchor.
+   */
   private label(anchor: Pt, text: string, color: string, size: number, bg?: string): void {
     const style: Phaser.Types.GameObjects.Text.TextStyle = { fontFamily: UI_FONT, fontSize: `${Math.max(10, Math.round(this.tile * size))}px`, color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 };
     if (bg) Object.assign(style, { backgroundColor: bg, padding: { x: 4, y: 2 } });
     const txt = this.add.text(0, 0, text, style).setOrigin(0).setDepth(20);
-    // Reserved annotation lane above the board: no token, HP or badge can
-    // intersect it. Wrap labels, with leaders identifying the original tile.
-    txt.setWordWrapWidth(this.scale.width - 24);
-    const previous = this.labels.at(-1);
-    let lx = previous ? previous.x + previous.width + 12 : 12;
-    let ly = previous?.y ?? 8;
-    if (lx + txt.width > this.scale.width - 12) { lx = 12; ly += (previous?.height ?? 20) + 5; }
-    txt.setPosition(lx, ly);
+    txt.setWordWrapWidth(Math.min(this.scale.width - 24, this.tile * 7));
     const a = this.px(anchor);
-    this.layers.links.lineStyle(1, 0xffffff, 0.25);
-    this.layers.links.lineBetween(lx + txt.width / 2, ly + txt.height, a.x, a.y);
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const gap = 3;
+    const clear = (r: Rect) =>
+      r.x >= 4 && r.y >= 4 && r.x + r.w <= W - 4 && r.y + r.h <= H - 4 &&
+      !this.occupied.some((o) => r.x < o.x + o.w + gap && r.x + r.w + gap > o.x && r.y < o.y + o.h + gap && r.y + r.h + gap > o.y);
+    const step = this.tile / 4;
+    const reach = this.tile * 1.5;
+    const spanX = this.tile * 2 + txt.width / 2;
+    const spanY = this.tile * 2 + txt.height / 2;
+    let best: Rect | null = null;
+    let bestScore = Infinity;
+    for (let dy = -spanY; dy <= spanY; dy += step) {
+      for (let dx = -spanX; dx <= spanX; dx += step) {
+        const r = { x: a.x + dx - txt.width / 2, y: a.y + dy - txt.height / 2, w: txt.width, h: txt.height };
+        // Distance from the anchor point to the nearest point of the label rectangle.
+        const nx = Math.max(r.x, Math.min(a.x, r.x + r.w)) - a.x;
+        const ny = Math.max(r.y, Math.min(a.y, r.y + r.h)) - a.y;
+        if (Math.hypot(nx, ny) > reach) continue;
+        const score = Math.hypot(dx, dy);
+        if (score >= bestScore || !clear(r)) continue;
+        best = r;
+        bestScore = score;
+      }
+    }
+    if (best) {
+      txt.setPosition(best.x, best.y);
+      this.occupied.push(best);
+    } else {
+      const previous = this.laneLabels.at(-1);
+      let lx = previous ? previous.x + previous.width + 12 : 12;
+      let ly = previous?.y ?? 4;
+      if (lx + txt.width > W - 12) { lx = 12; ly += (previous?.height ?? 20) + 5; }
+      txt.setPosition(lx, ly);
+      this.laneLabels.push(txt);
+      const from = { x: lx + txt.width / 2, y: ly + txt.height };
+      const t = firstEntry(from, a, this.occupied);
+      this.occupied.push({ x: lx, y: ly, w: txt.width, h: txt.height });
+      if (Math.hypot((a.x - from.x) * t, (a.y - from.y) * t) >= 4) {
+        this.layers.links.lineStyle(1, 0xffffff, 0.25);
+        this.layers.links.lineBetween(from.x, from.y, from.x + (a.x - from.x) * t, from.y + (a.y - from.y) * t);
+      }
+    }
     this.labels.push(txt);
   }
 
@@ -292,6 +363,8 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
     for (const g of Object.values(this.layers)) g.clear();
     for (const l of this.labels) l.destroy();
     this.labels = [];
+    this.laneLabels = [];
+    this.occupied = [];
     if (!s.battle) return;
     const view = boardView(s);
 
@@ -332,6 +405,8 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
       this.layers[seg.layer].lineStyle(seg.width, hex(seg.color), seg.alpha);
       this.layers[seg.layer].lineBetween(a.x, a.y, c.x, c.y);
     }
+    // Token bounds (body, HP bar, badge, name) that labels must not cover.
+    this.occupied = [...this.tokens.values()].map((t) => ({ x: t.root.x - t.w / 2, y: t.root.y - t.h / 2, w: t.w, h: t.h }));
     for (const l of view.labels) this.label(l.anchor, l.text, l.color, l.size, l.bg);
   }
 

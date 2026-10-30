@@ -77,8 +77,9 @@ export class GroundShape {
   }
 }
 
+/** Overlays are unlit and untone-mapped so their hues keep the 2D board's strength over lit floors. */
 export function overlayMaterial(color: string, opacity: number): THREE.MeshBasicMaterial {
-  return new THREE.MeshBasicMaterial({ color, opacity, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  return new THREE.MeshBasicMaterial({ color, opacity, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, fog: false });
 }
 
 // ---------------- Tokens ----------------
@@ -108,12 +109,15 @@ const PLATE_H = 176;
 const FONT = 'Georgia, "Times New Roman", serif';
 const UI_FONT = 'Inter, "Segoe UI", system-ui, sans-serif';
 
-/** Pawn silhouette (radius, height) for the lathe. */
+/** Pawn silhouette (radius, height) for the lathe; slimmer than a tile so neighbours and walls stay visible. */
 const PAWN = [
-  [0, 0], [0.31, 0], [0.31, 0.07], [0.24, 0.1], [0.17, 0.15], [0.12, 0.3], [0.11, 0.38], [0.17, 0.41], [0.17, 0.44], [0.08, 0.47], [0, 0.47],
+  [0, 0], [0.26, 0], [0.26, 0.07], [0.2, 0.1], [0.14, 0.15], [0.1, 0.3], [0.09, 0.38], [0.14, 0.41], [0.14, 0.44], [0.07, 0.47], [0, 0.47],
 ].map(([r, h]) => new THREE.Vector2(r!, h!));
 
 export const PAWN_HEIGHT = 0.62;
+/** Floating plate sprite size (world units wide) per token kind, and its centre height. */
+export const PLATE_SCALE = { pawn: 2.0, boss: 2.5 };
+const PLATE_HEIGHT = { pawn: 1.5, boss: 2.7 };
 
 export function makeToken(u: UnitState): Token3D {
   const big = u.footprint.length > 1;
@@ -155,14 +159,14 @@ export function makeToken(u: UnitState): Token3D {
     const hover = new GroundShape();
     hover.frame(-w / 2 - 0.02, -h / 2 - 0.02, w + 0.04, h + 0.04, 0.04);
     hoverGeometry = groundGeometry(hover);
-    plateHeight = 2.25;
+    plateHeight = PLATE_HEIGHT.boss;
   } else {
     const pawnMaterial = track(new THREE.MeshStandardMaterial({ color: sideColor, roughness: 0.55, metalness: 0.15 }));
     const pawn = new THREE.Mesh(new THREE.LatheGeometry(PAWN, 28), pawnMaterial);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 24, 16), pawnMaterial);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 24, 16), pawnMaterial);
     head.position.y = 0.53;
     const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.33, 0.35, 0.05, 32),
+      new THREE.CylinderGeometry(0.28, 0.3, 0.05, 32),
       track(new THREE.MeshStandardMaterial({ color: u.side === 'player' ? COLORS.partyDark : COLORS.enemyDark, roughness: 0.8 })),
     );
     base.position.y = 0.025;
@@ -172,9 +176,9 @@ export function makeToken(u: UnitState): Token3D {
       root.add(m);
       pickables.push(m);
     }
-    ringGeometry = new THREE.RingGeometry(0.36, 0.42, 40).rotateX(-Math.PI / 2);
-    hoverGeometry = new THREE.RingGeometry(0.45, 0.49, 40).rotateX(-Math.PI / 2);
-    plateHeight = 1.02;
+    ringGeometry = new THREE.RingGeometry(0.32, 0.38, 40).rotateX(-Math.PI / 2);
+    hoverGeometry = new THREE.RingGeometry(0.41, 0.45, 40).rotateX(-Math.PI / 2);
+    plateHeight = PLATE_HEIGHT.pawn;
   }
 
   const ring = new THREE.Mesh(ringGeometry, track(new THREE.MeshBasicMaterial({ color: sideColor, depthWrite: false, side: THREE.DoubleSide })));
@@ -192,7 +196,7 @@ export function makeToken(u: UnitState): Token3D {
   plateTexture.colorSpace = THREE.SRGBColorSpace;
   plateTexture.anisotropy = 4;
   const plate = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: plateTexture, depthTest: false, depthWrite: false })));
-  const plateScale = big ? 1.9 : 1.2;
+  const plateScale = big ? PLATE_SCALE.boss : PLATE_SCALE.pawn;
   plate.scale.set(plateScale, (plateScale * PLATE_H) / PLATE_W, 1);
   plate.position.y = plateHeight;
   plate.renderOrder = 20;
@@ -223,50 +227,52 @@ export function paintToken(tok: Token3D, u: UnitState, active: boolean, hovered:
   g.clearRect(0, 0, PLATE_W, PLATE_H);
   const cx = PLATE_W / 2;
   if (tok.badge) {
-    g.font = `bold 22px ${UI_FONT}`;
+    g.font = `bold 30px ${UI_FONT}`;
     g.textAlign = 'center';
     g.textBaseline = 'top';
-    g.lineWidth = 5;
+    g.lineWidth = 7;
+    g.lineJoin = 'round';
     g.strokeStyle = '#000';
-    g.strokeText(tok.badge, cx, 4, PLATE_W - 8);
+    g.strokeText(tok.badge, cx, 2, PLATE_W - 8);
     g.fillStyle = '#ffd166';
-    g.fillText(tok.badge, cx, 4, PLATE_W - 8);
+    g.fillText(tok.badge, cx, 2, PLATE_W - 8);
   }
-  const my = 80;
+  const my = 88;
   if (tok.big) {
-    g.font = `bold 46px ${FONT}`;
+    g.font = `bold 60px ${FONT}`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.lineWidth = 6;
+    g.lineWidth = 8;
+    g.lineJoin = 'round';
     g.strokeStyle = '#000';
-    g.strokeText(u.glyph, cx, my - 8);
+    g.strokeText(u.glyph, cx, my - 10);
     g.fillStyle = '#f3e9d2';
-    g.fillText(u.glyph, cx, my - 8);
-    g.font = `24px ${FONT}`;
-    g.strokeText(u.name.toUpperCase(), cx, my + 34, PLATE_W - 12);
+    g.fillText(u.glyph, cx, my - 10);
+    g.font = `bold 30px ${FONT}`;
+    g.strokeText(u.name.toUpperCase(), cx, my + 38, PLATE_W - 12);
     g.fillStyle = '#e8c9a0';
-    g.fillText(u.name.toUpperCase(), cx, my + 34, PLATE_W - 12);
+    g.fillText(u.name.toUpperCase(), cx, my + 38, PLATE_W - 12);
   } else {
     g.beginPath();
-    g.arc(cx, my, 40, 0, Math.PI * 2);
+    g.arc(cx, my + 4, 54, 0, Math.PI * 2);
     g.fillStyle = u.side === 'player' ? COLORS.partyDark : COLORS.enemyDark;
     g.fill();
-    g.lineWidth = 6;
+    g.lineWidth = 8;
     g.strokeStyle = active ? COLORS.gold : sideColor;
     g.stroke();
-    g.font = `bold 40px ${FONT}`;
+    g.font = `bold 62px ${FONT}`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.fillStyle = '#f3e9d2';
-    g.fillText(u.glyph, cx, my + 2);
+    g.fillText(u.glyph, cx, my + 8);
   }
-  const bw = 180;
-  const by = 140;
+  const bw = tok.big ? 220 : 108;
+  const by = 148;
   const frac = Math.max(0, u.hp / u.maxHp);
-  g.fillStyle = 'rgba(0,0,0,0.75)';
-  g.fillRect(cx - bw / 2 - 3, by - 3, bw + 6, 22);
+  g.fillStyle = 'rgba(0,0,0,0.8)';
+  g.fillRect(cx - bw / 2 - 4, by - 4, bw + 8, 28);
   g.fillStyle = frac > 0.5 ? '#6fbf73' : frac > 0.25 ? '#e0b13a' : '#d9534f';
-  g.fillRect(cx - bw / 2, by, bw * frac, 16);
+  g.fillRect(cx - bw / 2, by, bw * frac, 20);
   tok.plateTexture.needsUpdate = true;
 }
 

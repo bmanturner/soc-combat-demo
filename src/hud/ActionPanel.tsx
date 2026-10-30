@@ -8,7 +8,7 @@ import { WeaponControls } from './WeaponControls';
 import { unitById } from '../rules/state';
 import type { BattleState, UnitState } from '../rules/types';
 import { controller } from '../game/controller';
-import { activePlayer, endTurnPreview } from '../game/preview';
+import { activePlayer, endTurnPreview, pendingFor } from '../game/preview';
 import { ap, pct, useGame } from './hooks';
 
 import { PATTERN_TEXT, selectedWeaponMode } from '../game/weapon-summary';
@@ -77,6 +77,7 @@ export function ActionPanel() {
   const bot = useGame((s) => s.botParty);
   const hoverUnitId = useGame((s) => s.hoverUnitId);
   const hoverTile = useGame(s => s.hoverTile);
+  const actionHover = useGame(s => s.actionHover);
   if (!battle) return null;
   const u = activePlayer(battle);
   const a = battle.active;
@@ -86,6 +87,8 @@ export function ActionPanel() {
   const attackMode = u ? attackModes(battle,u).find(m => m.id === (mode.kind === 'attack' ? mode.modeId : undefined)) ?? attackModes(battle,u)[0] : null;
   const attackReason = u ? combatActionReason(battle,u,'attack',attackMode?.ammo === 'bolt') : null;
   const preview = u && hoverTile && mode.kind === 'attack' ? previewAttack(battle,u,hoverTile,u.pos,mode.modeId) : null;
+  const pending = pendingFor({ battle, hoverTile, mode, busy, actionHover });
+  const commitWarn = pending && pending.danger !== 'none' ? pending : null;
   const spent = a ? a.moveSpent + a.actionSpent + a.reactionSpent : 0;
 
   return (
@@ -96,6 +99,14 @@ export function ActionPanel() {
           <div className="turn-ap">
             <span>Spent <b>{ap(spent)}</b> AP</span>
             <span>Movement left <b>{ap(movementLeft(battle, u))}</b> AP</span>
+          </div>
+          <div className="commit-warn-slot" role="status" aria-live="polite" data-testid="commit-warn-slot">
+            {commitWarn && (
+              <div className={`commit-warn ${commitWarn.danger}`} data-testid="commit-warn">
+                {commitWarn.verdict?.text ?? commitWarn.dangerText}
+                <span className="commit-warn-cost">{commitWarn.what}, {ap(commitWarn.extra)} AP</span>
+              </div>
+            )}
           </div>
           <div className="btn-row">
             <button className={mode.kind === 'move' ? 'on' : ''} onClick={() => controller.setMode({ kind: 'move' })} disabled={busy || a.movementLocked} title="M">
@@ -109,8 +120,8 @@ export function ActionPanel() {
           {preview && <div data-testid="attack-preview" className="hint">Selected attack: {preview.apCost} AP{preview.cycleAp !== preview.apCost && ` · ${preview.cycleAp} AP including reload`}<div>{preview.note}</div>{preview.candidates?.map(c => <div key={c.unitId}>{unitById(battle,c.unitId).name}: {pct(c.probability)} selection · one random</div>)}</div>}
           <button className={`end-turn ${end?.danger ?? ''}`} onClick={() => void controller.endTurn()} disabled={busy} data-testid="end-turn" title={end?.text || 'End your turn'}>
             {spent === 0 ? 'Wait' : 'End turn'} → next in {Math.round(end?.projected ?? 0)} AP <kbd>Space</kbd>
-            {end?.danger === 'hit' && <div className="warn">⚠ No escape if you stop here</div>}
-            {end?.danger === 'risk' && <div className="warn">⚠ Escape risk — inspect the timeline</div>}
+            {end?.danger === 'hit' && <div className="warn">No escape if you stop here</div>}
+            {end?.danger === 'risk' && <div className="warn">Escape risk, check the timeline</div>}
           </button>
           <div className="hint">{mode.kind === 'move' ? 'Click a blue tile to move, or an enemy to attack it. Right-click cancels.' : mode.kind === 'attack' ? (u.attack.pattern === 'dualArc' ? 'Solid = primary. Dashed = one random surviving enemy; the primary can be picked again.' : 'Click a tile to aim; T cycles attack modes. Sweep can target yourself.') : 'Click a highlighted target.'}</div>
         </div>

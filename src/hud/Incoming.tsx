@@ -4,7 +4,7 @@ import { eq } from '../rules/geometry';
 import { bossSweepThreat, escapeOutlook, projectedNextTurn } from '../rules/queries';
 import { effectCanHit, unitActsBefore } from '../rules/resolvers';
 import { alive, tilesOf } from '../rules/state';
-import { pendingFor } from '../game/preview';
+import { activePlayer, endTurnPreview, pendingFor } from '../game/preview';
 import { controller } from '../game/controller';
 import { useGame } from './hooks';
 
@@ -14,6 +14,7 @@ export function IncomingPanel() {
   const hoverTile = useGame(s => s.hoverTile), mode = useGame(s => s.mode), busy = useGame(s => s.busy), actionHover = useGame(s => s.actionHover);
   const pending = pendingFor({battle,hoverTile,mode,busy,actionHover});
   if (!battle) return null;
+  const idle = !pending && activePlayer(battle) ? endTurnPreview(battle) : null;
   const party = battle.units.filter((u) => u.side === 'player' && alive(u));
   const threat = bossSweepThreat(battle);
   const bf = breakFreeAt(battle);
@@ -25,7 +26,8 @@ export function IncomingPanel() {
   return (
     <div className="incoming" data-testid="incoming">
       <div className="section-title">Incoming</div>
-      {pending && <div className="muted" data-testid="incoming-preview">Preview {pending.what}: next turn in {Math.round(pending.projected)} AP. {pending.dangerText}</div>}
+      {pending && <div className={`muted inc-verdict ${pending.verdict?.tone ?? ''}`} data-testid="incoming-preview">{pending.what}: {pending.verdict?.text ?? pending.dangerText}</div>}
+      {idle && <div className={`muted inc-verdict ${idle.verdict.tone}`} data-testid="incoming-idle">Wait: {idle.verdict.text}</div>}
       {items.length === 0 && !threat && <div className="muted">Nothing telegraphed.</div>}
       {items.map(({ e, impactIn, inside }) => (
         <div key={e.id} className="inc-item">
@@ -41,7 +43,7 @@ export function IncomingPanel() {
             const who = isActive ? `${u.name} (if you stop here, next turn in ${Math.round(nextIn)})` : `${u.name} acts in ${Math.round(nextIn)}`;
             return (
               <div key={u.id} className={`inc-unit ${acts ? 'ok' : 'caught'}`} onMouseEnter={() => controller.hoverUnit(u.id)} onMouseLeave={() => controller.hoverUnit(null)}>
-                {who}: {acts ? outlook.disengageRisk > 0 ? `escape requires disengaging (${Math.round(outlook.disengageRisk * 100)}% held risk)` : `can still escape (+${Math.round(impactIn - nextIn)})` : `CAUGHT (${outlook.actsBefore ? 'no reachable safe tile' : 'impact before next turn'})`}
+                {who}: {acts ? outlook.disengageRisk > 0 ? `escape needs a disengage (${Math.round(outlook.disengageRisk * 100)}% risk)` : `can still escape (+${Math.round(impactIn - nextIn)})` : `CAUGHT (${outlook.actsBefore ? 'no reachable safe tile' : 'impact before next turn'})`}
               </div>
             );
           })}
@@ -67,7 +69,7 @@ export function IncomingPanel() {
             const ok = beforeBoss || outlook.canEscape;
             return (
               <div key={u.id} className={`inc-unit ${ok ? 'ok' : 'caught'}`}>
-                {u.name} in the zone, {isActive ? 'next turn if you stop now' : 'acts'} in {Math.round(nextIn)}: {beforeBoss ? 'acts before he does' : ok ? outlook.disengageRisk > 0 ? 'escape requires disengaging' : 'can get out before it lands' : 'WOULD BE CAUGHT'}
+                {u.name} in the zone, {isActive ? 'next turn if you stop now' : 'acts'} in {Math.round(nextIn)}: {beforeBoss ? 'acts before he does' : ok ? outlook.disengageRisk > 0 ? 'escape needs a disengage' : 'can get out before it lands' : 'would be caught'}
               </div>
             );
           })}

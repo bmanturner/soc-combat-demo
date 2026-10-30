@@ -11,6 +11,7 @@ import { attackOptions, previewAttack, previewSkill, reachable } from '../rules/
 import { occupant, unitById } from '../rules/state';
 import type { Action, BattleState, GameEvent } from '../rules/types';
 import { shareUrl } from './share';
+import { attackFailureReason } from './attack-reason';
 import { BOARD_VIEW_KEY, showToast, store, type BoardViewKind, type LogLine, type Mode } from './store';
 
 export interface Animator {
@@ -313,7 +314,7 @@ export const controller = {
       const mode = attackModes(state, u).find(m => m.id === modeId);
       if (mode?.pattern === 'ring8' && cheb(tile, u.pos) > 1) return showToast('Click yourself or a surrounding ring tile to commit Sweep.');
       if (a.acted) return showToast('Already acted this turn.');
-      if (!previewAttack(state, u, tile, u.pos, s.mode.modeId)) return showToast('No target in this mode’s range and pattern.');
+      if (!previewAttack(state, u, tile, u.pos, s.mode.modeId)) return showToast(attackFailureReason(state, u, tile, s.mode.modeId));
       await apply({ type: 'attack', unitId: u.id, target: tile, modeId: s.mode.modeId });
       await runLoop();
       return;

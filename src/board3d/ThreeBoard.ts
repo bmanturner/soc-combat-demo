@@ -23,12 +23,52 @@ const LAYER_ORDER: Record<FillLayer | LineLayer, number> = { zone: 1, telegraph:
 const HOME_DIRECTION = new THREE.Vector3(0, Math.cos((35 * Math.PI) / 180), Math.sin((35 * Math.PI) / 180));
 const CLICK_SLOP = 5;
 
-interface LaneLabel {
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface LabelPlacement {
   el: HTMLElement;
   anchor: Pt;
+  /** Leader to the anchor; only shown for labels that fell back to the top lane. */
   line: SVGLineElement;
-  /** Label bottom-center relative to the host, measured after layout. */
-  foot: { x: number; y: number };
+  w: number;
+  h: number;
+  /** Last chosen candidate slot (-1 = lane), kept for frame-to-frame stability. */
+  cand: number;
+  transform: string;
+}
+
+/** Candidate sides around an anchor, nearest-preferred order: below, right, left, then diagonals and above. */
+const LABEL_DIRS: [number, number][] = [[0, 1], [1, 0], [-1, 0], [1, 1], [-1, 1], [0, -1], [1, -1], [-1, -1]];
+
+function overlaps(a: Rect, b: Rect, margin: number): boolean {
+  return a.x < b.x + b.w + margin && a.x + a.w + margin > b.x && a.y < b.y + b.h + margin && a.y + a.h + margin > b.y;
+}
+
+/** Fraction along p→q (0..1) at which the segment first enters any rectangle; 1 when it enters none. */
+function firstEntry(p: { x: number; y: number }, q: { x: number; y: number }, rects: Rect[]): number {
+  let best = 1;
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  for (const r of rects) {
+    let t0 = 0;
+    let t1 = 1;
+    const clip = (d: number, lo: number, hi: number, origin: number): boolean => {
+      if (d === 0) return origin >= lo && origin <= hi;
+      let a = (lo - origin) / d;
+      let b = (hi - origin) / d;
+      if (a > b) [a, b] = [b, a];
+      t0 = Math.max(t0, a);
+      t1 = Math.min(t1, b);
+      return t0 <= t1;
+    };
+    if (clip(dx, r.x - 2, r.x + r.w + 2, p.x) && clip(dy, r.y - 2, r.y + r.h + 2, p.y)) best = Math.min(best, t0);
+  }
+  return best;
 }
 
 interface FloatText {
@@ -47,7 +87,7 @@ export class ThreeBoard implements Animator, Stage {
   private readonly overlayGroup = new THREE.Group();
   private readonly fxGroup = new THREE.Group();
   private readonly tokenGroup = new THREE.Group();
-  private readonly lane: HTMLDivElement;
+  private readonly labelLayer: HTMLDivElement;
   private readonly leaders: SVGSVGElement;
   private readonly floatLayer: HTMLDivElement;
   private readonly chrome: HTMLDivElement;
@@ -57,7 +97,7 @@ export class ThreeBoard implements Animator, Stage {
   private readonly clock = new TweenClock();
 
   private tokens = new Map<string, Token3D>();
-  private labels: LaneLabel[] = [];
+  private labels: LabelPlacement[] = [];
   private floats = new Set<FloatText>();
   private telegraphMaterials: { material: THREE.Material; base: number }[] = [];
   private width = 1;
@@ -75,6 +115,8 @@ export class ThreeBoard implements Animator, Stage {
   private animationJobs = new Set<() => void>();
   private animationEpoch = 0;
   private animationObjects = new Set<THREE.Object3D>();
+  private layoutDirty = true;
+  private layoutSig = '';
   private version = -1;
   private unsub: () => void;
   private destroyed = false;
@@ -92,7 +134,7 @@ export class ThreeBoard implements Animator, Stage {
 
     this.leaders = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     this.leaders.classList.add('board3d-leaders');
-    this.lane = el('div', 'board3d-lane');
+    this.labelLayer = el('div', 'board3d-labels');
     this.floatLayer = el('div', 'board3d-floats');
     this.chrome = el('div', 'board3d-chrome');
     const hint = el('span', 'board3d-hint');
@@ -102,7 +144,7 @@ export class ThreeBoard implements Animator, Stage {
     reset.dataset.testid = 'board3d-reset';
     reset.addEventListener('click', () => this.resetView());
     this.chrome.append(hint, reset);
-    host.append(this.leaders, this.lane, this.floatLayer, this.chrome);
+    host.append(this.leaders, this.labelLayer, this.floatLayer, this.chrome);
 
     this.scene.background = new THREE.Color(COLORS.bg);
     this.scene.fog = new THREE.Fog(COLORS.bg, 40, 90);
@@ -176,7 +218,7 @@ export class ThreeBoard implements Animator, Stage {
     this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
     this.leaders.remove();
-    this.lane.remove();
+    this.labelLayer.remove();
     this.floatLayer.remove();
     this.chrome.remove();
   }
@@ -205,13 +247,7 @@ export class ThreeBoard implements Animator, Stage {
     const box = (r: DOMRect) => ({ x: r.x - origin.x, y: r.y - origin.y, width: r.width, height: r.height });
     return {
       labels: this.labels.map((l) => ({ text: l.el.textContent ?? '', ...box(l.el.getBoundingClientRect()) })),
-      units: [...this.tokens.values()].map((t) => {
-        const bounds = new THREE.Box3().setFromObject(t.root);
-        const corners = [0, 1].flatMap((i) => [0, 1].flatMap((j) => [0, 1].map((k) => this.screen(new THREE.Vector3(i ? bounds.max.x : bounds.min.x, j ? bounds.max.y : bounds.min.y, k ? bounds.max.z : bounds.min.z)))));
-        const xs = corners.map((c) => c.x);
-        const ys = corners.map((c) => c.y);
-        return { id: t.unitId, x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
-      }),
+      units: this.tokenBounds().map((t) => ({ id: t.id, x: t.box.x, y: t.box.y, width: t.box.w, height: t.box.h })),
     };
   };
 
@@ -222,6 +258,7 @@ export class ThreeBoard implements Animator, Stage {
     this.leaders.setAttribute('viewBox', `0 0 ${this.width} ${this.height}`);
     this.camera.aspect = this.width / this.height;
     this.applyViewOffset(0, 0);
+    this.layoutDirty = true;
     const dir = this.camera.position.clone().sub(this.controls.target);
     this.fit(dir.lengthSq() > 0 ? dir.normalize() : HOME_DIRECTION);
     this.measureLabels();
@@ -371,7 +408,7 @@ export class ThreeBoard implements Animator, Stage {
     const s = store.getState();
     disposeTree(this.overlayGroup);
     this.telegraphMaterials = [];
-    this.lane.replaceChildren();
+    this.labelLayer.replaceChildren();
     this.leaders.replaceChildren();
     this.labels = [];
     if (!s.battle) return;
@@ -427,19 +464,159 @@ export class ThreeBoard implements Animator, Stage {
       const label = el('span', 'board3d-label');
       label.textContent = l.text;
       label.style.color = l.color;
-      label.style.fontSize = `${Math.max(10, Math.round(56 * l.size))}px`;
+      label.style.fontSize = `${Math.max(12, Math.round(56 * l.size))}px`;
       if (l.bg) label.style.background = l.bg;
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      this.lane.append(label);
+      this.labelLayer.append(label);
       this.leaders.append(line);
-      this.labels.push({ el: label, anchor: l.anchor, line, foot: { x: 0, y: 0 } });
+      this.labels.push({ el: label, anchor: l.anchor, line, w: 0, h: 0, cand: -1, transform: '' });
     }
     this.measureLabels();
   }
 
-  /** Read label geometry once per layout change; leaders then follow the camera every frame. */
+  /** Read label sizes once per layout change; placement then follows the camera. */
   private measureLabels(): void {
-    for (const l of this.labels) l.foot = { x: l.el.offsetLeft + l.el.offsetWidth / 2, y: l.el.offsetTop + l.el.offsetHeight };
+    for (const l of this.labels) {
+      l.w = l.el.offsetWidth;
+      l.h = l.el.offsetHeight;
+    }
+    this.layoutDirty = true;
+    if (this.labels.length) this.layoutLabels();
+  }
+
+  /** Screen-space rectangles for one box's eight corners. */
+  private boxRect(box: THREE.Box3): Rect {
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < 8; i++) {
+      v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+      const p = this.screen(v);
+      x0 = Math.min(x0, p.x);
+      y0 = Math.min(y0, p.y);
+      x1 = Math.max(x1, p.x);
+      y1 = Math.max(y1, p.y);
+    }
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  /** Projected screen bounds of every token: the solid body and the floating plate, plus their union. */
+  private tokenBounds(): { id: string; parts: Rect[]; box: Rect }[] {
+    this.camera.updateMatrixWorld();
+    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+    return [...this.tokens.values()].map((t) => {
+      t.root.updateMatrixWorld(true);
+      const body = new THREE.Box3();
+      for (const p of t.pickables) body.expandByObject(p);
+      const parts: Rect[] = [];
+      if (!body.isEmpty()) parts.push(this.boxRect(body));
+      const c = t.plate.getWorldPosition(new THREE.Vector3());
+      const k = t.root.scale.x;
+      // The pawn plate's painted content (medallion, HP bar) spans about 55% of the sprite width.
+      const hw = (t.plate.scale.x * k * (t.big ? 1 : 0.55)) / 2;
+      const hh = (t.plate.scale.y * k) / 2;
+      const cs = this.screen(c);
+      const cr = this.screen(c.clone().addScaledVector(right, hw));
+      const cu = this.screen(c.clone().addScaledVector(up, hh));
+      const pw = Math.abs(cr.x - cs.x);
+      const ph = Math.abs(cu.y - cs.y);
+      parts.push({ x: cs.x - pw, y: cs.y - ph, w: 2 * pw, h: 2 * ph });
+      const x0 = Math.min(...parts.map((r) => r.x));
+      const y0 = Math.min(...parts.map((r) => r.y));
+      const x1 = Math.max(...parts.map((r) => r.x + r.w));
+      const y1 = Math.max(...parts.map((r) => r.y + r.h));
+      return { id: t.unitId, parts, box: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } };
+    });
+  }
+
+  /**
+   * Place every label beside its anchor tile where nothing is in the way (tokens, plates, other labels, the
+   * chrome, the canvas edge); labels with no free spot go to the top lane with a leader clipped at the first token.
+   */
+  private layoutLabels(): void {
+    if (!this.labels.length) return;
+    const W = this.width;
+    const H = this.height;
+    const obstacles: Rect[] = this.tokenBounds().flatMap((t) => t.parts);
+    const chrome = this.chrome.getBoundingClientRect();
+    const origin = this.host.getBoundingClientRect();
+    obstacles.push({ x: chrome.x - origin.x - 4, y: chrome.y - origin.y - 4, w: chrome.width + 8, h: chrome.height + 8 });
+    const tokenRects = obstacles.slice(0, -1);
+    const placed: Rect[] = [];
+    const edge = 4;
+    const free = (r: Rect) => r.x >= edge && r.y >= edge && r.x + r.w <= W - edge && r.y + r.h <= H - edge && !obstacles.some((o) => overlaps(r, o, 3)) && !placed.some((o) => overlaps(r, o, 3));
+    const rings = (tile: number) => [6, tile * 0.5, tile, tile * 1.6];
+    const lane: LabelPlacement[] = [];
+
+    for (const l of this.labels) {
+      const a = this.screen(this.world(l.anchor, 0.03));
+      const tile = Math.max(24, Math.abs(this.screen(this.world({ x: l.anchor.x + 1, y: l.anchor.y }, 0.03)).x - a.x));
+      const rs = rings(tile);
+      const at = (i: number): Rect => {
+        const [dx, dy] = LABEL_DIRS[i % LABEL_DIRS.length]!;
+        const ring = rs[Math.floor(i / LABEL_DIRS.length)]!;
+        const cx = a.x + dx * (l.w / 2 + ring);
+        const cy = a.y + dy * (l.h / 2 + ring);
+        return { x: cx - l.w / 2, y: cy - l.h / 2, w: l.w, h: l.h };
+      };
+      const total = rs.length * LABEL_DIRS.length;
+      let pick = -1;
+      // Keep last frame's side while it stays valid, so labels do not flip while orbiting.
+      if (l.cand >= 0 && free(at(l.cand))) pick = l.cand;
+      for (let i = 0; pick < 0 && i < total; i++) if (free(at(i))) pick = i;
+      if (pick >= 0) {
+        const r = at(pick);
+        placed.push(r);
+        l.cand = pick;
+        l.line.style.display = 'none';
+        this.moveLabel(l, r.x, r.y);
+      } else {
+        l.cand = -1;
+        lane.push(l);
+      }
+    }
+
+    for (const l of lane) {
+      let x = 12;
+      let y = 8;
+      for (let guard = 0; guard < 300; guard++) {
+        if (x + l.w > W - 12 && x > 12) {
+          x = 12;
+          y += l.h + 5;
+          continue;
+        }
+        const r = { x, y, w: l.w, h: l.h };
+        const blocker = [...obstacles, ...placed].find((o) => overlaps(r, o, 3));
+        if (!blocker) break;
+        x = Math.max(x + 1, blocker.x + blocker.w + 8);
+      }
+      placed.push({ x, y, w: l.w, h: l.h });
+      this.moveLabel(l, x, y);
+      const a = this.screen(this.world(l.anchor, 0.03));
+      const from = { x: x + l.w / 2, y: y + l.h };
+      const t = firstEntry(from, a, tokenRects);
+      const ex = from.x + (a.x - from.x) * t;
+      const ey = from.y + (a.y - from.y) * t;
+      if (Math.hypot(ex - from.x, ey - from.y) < 4) {
+        l.line.style.display = 'none';
+      } else {
+        l.line.style.display = '';
+        l.line.setAttribute('x1', `${from.x}`);
+        l.line.setAttribute('y1', `${from.y}`);
+        l.line.setAttribute('x2', `${ex}`);
+        l.line.setAttribute('y2', `${ey}`);
+      }
+    }
+  }
+
+  private moveLabel(l: LabelPlacement, x: number, y: number): void {
+    const transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    if (transform === l.transform) return;
+    l.transform = transform;
+    l.el.style.transform = transform;
   }
 
   // ---------------- Input ----------------
@@ -525,12 +702,13 @@ export class ThreeBoard implements Animator, Stage {
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
 
-    for (const l of this.labels) {
-      const a = this.screen(this.world(l.anchor, 0.03));
-      l.line.setAttribute('x1', `${l.foot.x}`);
-      l.line.setAttribute('y1', `${l.foot.y}`);
-      l.line.setAttribute('x2', `${a.x}`);
-      l.line.setAttribute('y2', `${a.y}`);
+    // Labels re-place only when the camera, canvas or board changed (or tokens are moving).
+    const e = this.camera.matrixWorld.elements;
+    const sig = `${this.width}x${this.height}|${e[0]!.toFixed(3)},${e[1]!.toFixed(3)},${e[2]!.toFixed(3)},${e[4]!.toFixed(3)},${e[5]!.toFixed(3)},${e[6]!.toFixed(3)},${e[12]!.toFixed(3)},${e[13]!.toFixed(3)},${e[14]!.toFixed(3)}`;
+    if (this.layoutDirty || this.animating || sig !== this.layoutSig) {
+      this.layoutSig = sig;
+      this.layoutDirty = false;
+      this.layoutLabels();
     }
     for (const f of this.floats) {
       const p = this.screen(f.at.clone().setY(f.at.y + f.rise));

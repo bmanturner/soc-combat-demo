@@ -19,7 +19,8 @@ export function Timeline() {
   const pos = (at: number) => `${(Math.min(Math.max(at, 0), SPAN) / SPAN) * 100}%`;
   const u = activePlayer(battle);
   const end = u ? endTurnPreview(battle) : null;
-  const ghost = pending ?? (u ? { projected: end!.projected, danger: end!.danger, what: 'Wait / end turn', dangerText: end!.text } : null);
+  const ghost = pending ?? (u ? { projected: end!.projected, danger: end!.danger, what: 'Wait / end turn', dangerText: end!.text, verdict: end!.verdict } : null);
+  const tone = ghost?.verdict?.tone ?? (ghost?.danger === 'none' ? 'clear' : ghost?.danger);
   const threat = bossSweepThreat(battle);
   const bf = breakFreeAt(battle);
   const bfIn = bf === null ? null : bf - battle.clock;
@@ -40,13 +41,12 @@ export function Timeline() {
           </span>
         )}
         {ghost && (
-          <span className={`tl-ghost-text ${ghost.danger}`} data-testid="ghost-text">
-            {ghost.what}: next turn in <b>{Math.round(ghost.projected)}</b> AP
-            {ghost.danger === 'hit' ? ' ⚠ no escape' : ghost.danger === 'risk' ? ' ⚠ escape risk' : ''}
+          <span className={`tl-ghost-text ${tone}`} data-testid="ghost-text">
+            {ghost.what}: next turn in <b>{Math.round(ghost.projected)}</b> AP{ghost.verdict ? ` · ${ghost.verdict.short}` : ''}
           </span>
         )}
       </div>
-      <div className="tl-track" style={{ height: `${108 + entries.filter(e => e.kind !== 'unit' && e.at <= SPAN).length * 19}px` }}>
+      <div className="tl-track" style={{ height: `${124 + entries.filter(e => e.kind !== 'unit' && e.at <= SPAN).length * 19}px` }}>
         {ticks.map((t) => (
           <div key={t} className={`tl-tick ${t % 50 === 0 ? 'major' : ''}`} style={{ left: pos(t) }}>
             {t % 50 === 0 && <span>{t}</span>}
@@ -55,11 +55,12 @@ export function Timeline() {
         {threat && threat.landsIn <= SPAN && (
           <div className="tl-sweep" style={{ left: pos(threat.bossActsIn), width: `${((Math.min(threat.landsIn, SPAN) - Math.min(threat.bossActsIn, SPAN)) / SPAN) * 100}%` }} title="If anyone is in the sweep zone when the Nephilim acts, the sweep lands at the end of this band.">
             <span>next sweep, if anyone is in the zone</span>
+            <em className="tl-lands-cap" data-testid="tl-sweep-lands">sweep lands · {Math.round(threat.landsIn)}</em>
           </div>
         )}
         {bfIn !== null && bfIn <= SPAN && <div className="tl-bf" style={{ left: pos(bfIn) }} title="He tears free here." />}
         {ghost && (
-          <div className={`tl-ghost ${ghost.danger}`} style={{ left: pos(ghost.projected) }} data-testid="ghost" title={ghost.dangerText || 'Where your next turn would land'}>
+          <div className={`tl-ghost ${tone}`} style={{ left: pos(ghost.projected) }} data-testid="ghost" title={ghost.verdict?.text || ghost.dangerText || 'Where your next turn would land'}>
             {u?.glyph}
           </div>
         )}
@@ -67,7 +68,7 @@ export function Timeline() {
           .filter((e) => e.kind !== 'unit' && e.at <= SPAN)
           .map((e, i) => (
             <div key={`tag-${e.id}`} className="tl-effect-tag" style={{ left: pos(Math.min(e.at, 240)), top: `${108 + i * 19}px` }}>
-              {e.label} · {Math.round(e.at)}
+              {e.label} lands · {Math.round(e.at)}
             </div>
           ))}
         {entries.map((e) => {

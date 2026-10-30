@@ -2,11 +2,11 @@
 // Pure functions of store state; each renderer only decides how to draw the result.
 // Coordinates are tile units: tile (x, y) spans [x, x+1) × [y, y+1); its center is (x + 0.5, y + 0.5).
 
-import { patternTiles } from '../rules/patterns';
+import { aimDirection, patternTiles } from '../rules/patterns';
 import { attackModes } from '../rules/equipment';
-import { eq, key, type Vec } from '../rules/geometry';
+import { cheb, eq, key, type Vec } from '../rules/geometry';
 import { attackOptions, bossSweepThreat, engagedPairs, pathSafety, previewAttack, previewSkill, reachable, skillOptions, type AttackPreview } from '../rules/queries';
-import { alive, isFlanked, tilesOf, unitById } from '../rules/state';
+import { alive, isFlanked, lineOfSight, terrainAt, tilesOf, unitById } from '../rules/state';
 import type { BattleState, UnitState } from '../rules/types';
 import { pendingFor } from '../game/preview';
 import type { GameStore } from '../game/store';
@@ -141,7 +141,7 @@ export function boardView(s: BoardViewInput): BoardView {
 
   // Telegraphed effects
   for (const e of b.effects) {
-    fill('telegraph', e.tiles, COLORS.danger, 0.42, COLORS.danger);
+    fill('telegraph', e.tiles, COLORS.danger, 0.5, COLORS.danger);
     const r = bounds(e.tiles);
     label({ x: (r.x0 + r.x1) / 2 + 0.5, y: r.y0 + 0.25 }, `${e.name} · ${Math.round(e.resolveAt - b.clock)} AP`, '#ffffff', 0.22, 'rgba(120,20,20,0.85)');
   }
@@ -164,7 +164,7 @@ export function boardView(s: BoardViewInput): BoardView {
 
   const attackPreview = (p: AttackPreview) => {
     const guaranteed = p.candidates ? p.targets.flatMap((t) => tilesOf(unitById(b, t.unitId))) : p.tiles;
-    fill('overlay', guaranteed, COLORS.aim, 0.45, COLORS.aim);
+    fill('overlay', guaranteed, COLORS.aim, 0.4, COLORS.aim);
     for (const t of p.targets) {
       const tu = unitById(b, t.unitId);
       if (!alive(tu)) continue;
@@ -192,23 +192,36 @@ export function boardView(s: BoardViewInput): BoardView {
   if (s.mode.kind === 'move') {
     const reach = reachable(b, u.id);
     const tiles = [...reach.values()].map((r) => r.path[r.path.length - 1]!).filter((p) => !eq(p, u.pos));
-    fill('overlay', tiles, COLORS.move, 0.22);
+    // Reach is the quietest overlay: a light wash plus the perimeter below. It skips telegraphed tiles so Path Blue never mixes with the red zone.
+    const telegraphed = new Set(b.effects.flatMap((e) => e.tiles.map(key)));
+    fill('overlay', tiles.filter((p) => !telegraphed.has(key(p))), COLORS.move, 0.16);
+    // Path Blue perimeter: edges between a reachable tile and a non-reachable / out-of-map neighbour.
+    const inReach = new Set([key(u.pos), ...tiles.map(key)]);
+    for (const p of [u.pos, ...tiles]) {
+      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as const) {
+        if (inReach.has(key({ x: p.x + dx, y: p.y + dy }))) continue;
+        const from = dx === 0 ? { x: p.x, y: p.y + (dy > 0 ? 1 : 0) } : { x: p.x + (dx > 0 ? 1 : 0), y: p.y };
+        const to = dx === 0 ? { x: p.x + 1, y: from.y } : { x: from.x, y: p.y + 1 };
+        view.segments.push({ layer: 'overlay', from, to, color: COLORS.move, alpha: 0.85, width: 2 });
+      }
+    }
     // Attackable enemies from here (click them to attack).
     if (!a.acted) for (const opt of attackOptions(b, u)) markTargets(opt, 0.25);
     const hov = s.hoverTile;
     const r = hov ? reach.get(key(hov)) : undefined;
     if (hov && r && !eq(hov, u.pos)) {
-      const color = pathSafety(r) < 1 ? COLORS.amber : '#ffffff';
+      const color = pathSafety(r) < 1 ? COLORS.amber : COLORS.move;
       for (let i = 1; i < r.path.length; i++) {
         view.segments.push({ layer: 'overlay', from: tileCenter(r.path[i - 1]!), to: tileCenter(r.path[i]!), color, alpha: 0.9, width: 4 });
       }
+      fill('overlay', [hov], color, 0.34, color);
       for (const risk of r.risks) {
         const p = r.path[risk.index]!;
         label({ x: p.x + 0.5, y: p.y + 0.5 - 0.3 }, `held ${Math.round(risk.chance * 100)}%`, '#ffcf66', 0.18);
       }
       const pending = pendingFor({ battle: b, hoverTile: hov, mode: { kind: 'move' }, busy: false });
       const tone = pending?.danger === 'hit' ? '#ff6b5b' : pending?.danger === 'risk' ? '#ffb347' : '#ffffff';
-      const note = pending?.danger === 'hit' ? ' ⚠ no escape' : pending?.danger === 'risk' ? ' ⚠ escape risk' : '';
+      const note = pending?.danger === 'hit' ? ' · no escape' : pending?.danger === 'risk' ? ' · escape risk' : '';
       label({ x: hov.x + 0.5, y: hov.y + 0.5 + 0.05 }, `${pending?.extra ?? r.cost} AP${note}`, tone, 0.2);
     } else if (hov && !a.acted) {
       const p = previewAttack(b, u, hov);
@@ -218,6 +231,7 @@ export function boardView(s: BoardViewInput): BoardView {
     const skillId = s.mode.kind === 'skill' ? s.mode.skillId : null;
     const modeId = s.mode.kind === 'attack' ? s.mode.modeId : undefined;
     const selected = attackModes(b, u).find((m) => m.id === modeId);
+    const mode = selected ?? attackModes(b, u)[0];
     if (!skillId && selected?.pattern === 'ring8') {
       const ring = patternTiles('ring8', u.pos, 0).map((p) => p.tile).filter((p) => p.x >= 0 && p.y >= 0 && p.x < b.map.width && p.y < b.map.height);
       fill('overlay', ring, COLORS.aim, 0.25, COLORS.aim);
@@ -226,8 +240,28 @@ export function boardView(s: BoardViewInput): BoardView {
     const opts = skillId ? skillOptions(b, u, skillId) : attackOptions(b, u).filter((o) => o.modeId === (modeId ?? attackModes(b, u)[0]!.id));
     for (const opt of opts) markTargets(opt, 0.3);
     // Show the aimable directions.
-    if (!skillId && u.attack.pattern !== 'ranged') fill('overlay', opts.map((o) => o.anchor), COLORS.aim, 0.18);
+    if (!skillId && mode && mode.pattern !== 'ranged') fill('overlay', opts.map((o) => o.anchor), COLORS.aim, 0.14);
+    // Weapon reach, visible even without a valid hovered target.
+    if (!skillId && mode?.pattern === 'ranged') {
+      const [lo, hi] = mode.range ?? [1, 1];
+      const inRange: Vec[] = [];
+      for (let y = 0; y < b.map.height; y++)
+        for (let x = 0; x < b.map.width; x++) {
+          const p = { x, y };
+          const d = cheb(u.pos, p);
+          if (d < lo || d > hi || terrainAt(b, p) === 'wall' || !lineOfSight(b, u.pos, p)) continue;
+          inRange.push(p);
+        }
+      fill('overlay', inRange, COLORS.aim, 0.1);
+    }
     const hov = s.hoverTile;
+    if (!skillId && hov && mode && mode.pattern !== 'ranged' && mode.pattern !== 'ring8' && !previewAttack(b, u, hov, u.pos, modeId)) {
+      const i = aimDirection(mode.pattern, u.pos, hov);
+      if (i !== null) {
+        const aimed = patternTiles(mode.pattern, u.pos, i).map((p) => p.tile).filter((p) => p.x >= 0 && p.y >= 0 && p.x < b.map.width && p.y < b.map.height && terrainAt(b, p) !== 'wall');
+        fill('overlay', aimed, COLORS.aim, 0.2);
+      }
+    }
     if (hov) {
       const p = skillId ? previewSkill(b, u, skillId, hov) : previewAttack(b, u, hov, u.pos, modeId);
       if (p) attackPreview(p);
