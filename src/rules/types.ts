@@ -205,7 +205,15 @@ export interface DelayedEffect {
   applies?: 'dazed';
   /** Units inside the area when it was cast (telemetry: escapes). */
   threatenedAtCast: string[];
+  /** Each unit's chance to get out, noted whenever it holds the turn before impact; explains catches. */
+  escapeChances?: Record<string, EscapeChance>;
 }
+
+/** At a unit's turn before impact: already clear or able to reach a clear tile, boxed in, or held while leaving. */
+export type EscapeChance = 'couldEscape' | 'trapped' | 'held';
+
+/** Why an eligible unit was caught: its turn came after impact, it had no way out, it was held, or it ended inside. */
+export type CaughtReason = 'late' | 'trapped' | 'held' | 'stayed';
 
 export interface ActiveTurn {
   unitId: string;
@@ -352,7 +360,7 @@ export type GameEvent =
   | { t: 'status'; unitId: string; status: 'dazed' | 'feared' | 'recovered'; pushback?: number }
   | { t: 'displace'; unitId: string; from: Vec; to: Vec; reason: 'push' | 'pull' | 'dodge' }
   | { t: 'effectCast'; effect: DelayedEffect }
-  | { t: 'effectResolve'; effectId: string; name: string; tiles: Vec[]; hits: { unitId: string; damage: number; hpAfter: number; reactions?: ReactionResult[]; avoided?: ReactionResult['kind'] | null; displacedTo?: Vec }[] }
+  | { t: 'effectResolve'; effectId: string; name: string; tiles: Vec[]; at: number; hits: { unitId: string; damage: number; hpAfter: number; reactions?: ReactionResult[]; avoided?: ReactionResult['kind'] | null; displacedTo?: Vec; caught?: { reason: CaughtReason; nextTurnAt: number } }[]; /** Living units threatened at cast who were not hit. */ escaped: string[] }
   | { t: 'turnEnd'; unitId: string; spent: number; delay: number; nextTurnAt: number }
   | { t: 'outcome'; outcome: Outcome }
   | { t: 'info'; text: string };

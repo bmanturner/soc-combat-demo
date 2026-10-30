@@ -238,6 +238,7 @@ export function advance(state: BattleState, events: GameEvent[]): void {
       surchargePaid: false,
     };
     if (u.ai === 'nephilim') trackHiding(state, u);
+    for (const eff of state.effects) noteEscapeChance(state, u, eff);
     events.push({ t: 'turnStart', unitId: u.id, clock: state.clock });
     return;
   }
@@ -336,6 +337,7 @@ function doMove(state: BattleState, unit: UnitState, to: Vec, events: GameEvent[
       }
       if (held && holder) {
         if (tel) tel.disengageFails += 1;
+        for (const eff of state.effects) if (eff.escapeChances?.[unit.id] === 'couldEscape') eff.escapeChances[unit.id] = 'held';
         // Attack of opportunity is chance-based, resolved before the one allowed step.
         const aoo = roll(state.rng, state.config.aooChance);
         if (aoo.success) {
@@ -643,8 +645,18 @@ export function castEffect(
     threatenedAtCast: threatened,
   };
   state.effects.push(eff);
+  // The unit holding the turn (usually the caster) may still step out before it ends.
+  if (state.active) noteEscapeChance(state, unitById(state, state.active.unitId), eff);
   events.push({ t: 'effectCast', effect: eff });
   return eff;
+}
+
+/** Record whether `u`, holding the turn, could end it clear of `eff`; the latest turn before impact wins. */
+function noteEscapeChance(state: BattleState, u: UnitState, eff: DelayedEffect): void {
+  if (!effectCanHit(state, eff, u)) return;
+  const inside = (pos: Vec) => tilesOf({ ...u, pos }).some((t) => eff.tiles.some((x) => eq(x, t)));
+  const clear = !inside(u.pos) || [...reachable(state, u.id).values()].some((r) => !inside(r.path.at(-1)!));
+  (eff.escapeChances ??= {})[u.id] = clear ? 'couldEscape' : 'trapped';
 }
 
 function resolveEffect(state: BattleState, eff: DelayedEffect, events: GameEvent[]): void {
@@ -658,18 +670,21 @@ function resolveEffect(state: BattleState, eff: DelayedEffect, events: GameEvent
     if (reaction.displacedTo) events.push({ t: 'displace', unitId: u.id, from, to: reaction.displacedTo, reason: 'dodge' });
     const amount = reaction.avoided ? 0 : delayedDamage(state, eff, u);
     if (!reaction.avoided) dealDamage(state, source, u, amount, events);
-    hits.push({ unitId: u.id, damage: amount, hpAfter: u.hp, ...reaction });
+    const chance = eff.escapeChances?.[u.id];
+    const reason = chance === undefined ? 'late' : chance === 'couldEscape' ? 'stayed' : chance;
+    hits.push({ unitId: u.id, damage: amount, hpAfter: u.hp, ...reaction, ...(!reaction.avoided && { caught: { reason, nextTurnAt: u.nextTurnAt } }) });
     const tel = state.telemetry[u.id];
     if (tel && !reaction.avoided) tel.caught += 1;
   }
-  for (const id of eff.threatenedAtCast) {
-    if (!hits.some((h) => h.unitId === id)) {
-      const u = state.units.find((x) => x.id === id);
-      const tel = state.telemetry[id];
-      if (u && effectCanHit(state, eff, u) && tel) tel.escapes += 1;
-    }
+  const escaped = eff.threatenedAtCast.filter((id) => {
+    const u = state.units.find((x) => x.id === id);
+    return !!u && alive(u) && effectCanHit(state, eff, u) && !hits.some((h) => h.unitId === id);
+  });
+  for (const id of escaped) {
+    const tel = state.telemetry[id];
+    if (tel) tel.escapes += 1;
   }
-  events.push({ t: 'effectResolve', effectId: eff.id, name: eff.name, tiles: eff.tiles, hits });
+  events.push({ t: 'effectResolve', effectId: eff.id, name: eff.name, tiles: eff.tiles, at: eff.resolveAt, hits, escaped });
   for (const h of hits) {
     const u = unitById(state, h.unitId);
     if (u.ko) {

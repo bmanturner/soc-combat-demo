@@ -2,7 +2,7 @@
 // Both boards implement `Stage`; timings and wording live here so 2D and 3D stay in step.
 
 import type { Vec } from '../rules/geometry';
-import type { BattleState, GameEvent, UnitState } from '../rules/types';
+import type { BattleState, CaughtReason, GameEvent, UnitState } from '../rules/types';
 import { COLORS } from './palette';
 import { tileCenter, unitCenter, type Pt } from './view-model';
 
@@ -38,6 +38,8 @@ export interface Stage {
 }
 
 const above = (p: Pt, dy: number): Pt => ({ x: p.x, y: p.y - dy });
+
+const CAUGHT_LABEL: Record<CaughtReason, string> = { late: 'TOO LATE', trapped: 'NO WAY OUT', held: 'HELD', stayed: 'STAYED IN' };
 
 function center(tiles: Vec[]): Pt {
   const xs = tiles.map((p) => p.x);
@@ -154,8 +156,14 @@ export async function choreograph(stage: Stage, events: GameEvent[], before: Bat
           const t = find(h.unitId);
           if (!t) continue;
           stage.float(above(unitCenter(t), 0.2), `-${h.damage}`, '#ff5a4a', true);
+          // Party catches say why, so a failure teaches the timeline instead of just hurting.
+          if (h.caught && t.side === 'player') stage.float(above(unitCenter(t), -0.3), CAUGHT_LABEL[h.caught.reason], COLORS.caught);
           t.hp = h.hpAfter;
           stage.paintToken(h.unitId, t, false);
+        }
+        for (const id of e.escaped) {
+          const u = find(id);
+          if (u?.side === 'player') stage.float(above(unitCenter(u), 0.3), 'ESCAPED', COLORS.ready);
         }
         await stage.flashTiles(e.tiles, '#ffe2b0', 0.85, 520 * k);
         break;

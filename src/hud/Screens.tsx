@@ -333,7 +333,11 @@ export function HelpOverlay() {
         </ul>
         <p className="muted">Keys: M move · A attack · T cycle mode · R reload · W swap · 1–9 skills · Space end turn · Esc / right-click cancel.</p>
         <p className="muted">3D board: drag to orbit, wheel to zoom, Reset view to re-frame. A drag never commits a move; click in place.</p>
-        <button className="primary" onClick={() => store.setState({ helpOpen: false })}>Got it</button>
+        <p className="muted">Touch: tap a tile, Swap or Reload to preview it, then tap it again to commit. On the 3D board, drag to orbit and pinch to zoom.</p>
+        <div className="btn-row">
+          <button className="primary" onClick={() => store.setState({ helpOpen: false })}>Got it</button>
+          <button onClick={() => { controller.setTelegraphGuideDone(false); store.setState({ helpOpen: false }); }} data-testid="replay-telegraph-guide">Replay telegraph lesson</button>
+        </div>
       </div>
     </div>
   );

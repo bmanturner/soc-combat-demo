@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { SKILLS, WEAPONS } from "../content/gear";
 import {
   attackModes,
@@ -26,6 +27,8 @@ export function WeaponControls({
   busy: boolean;
   mode: Mode;
 }) {
+  // Touch has no hover: a touch press previews on the first tap and commits on the second (see controller.tapAction).
+  const touchPress = useRef(false);
   const w = equippedWeapon(b, u),
     modes = attackModes(b, u);
   const reload = previewReload(b, u),
@@ -72,14 +75,20 @@ export function WeaponControls({
       )}
       {w.reloadAp && (
         <div
-          onMouseEnter={() => store.setState({ actionHover: "reload" })}
-          onMouseLeave={() => store.setState({ actionHover: null })}
+          onPointerEnter={(e) => { if (e.pointerType !== "touch") store.setState({ actionHover: "reload" }); }}
+          onPointerLeave={(e) => { if (e.pointerType !== "touch") store.setState({ actionHover: null }); }}
         >
           <button
             data-testid="reload"
             disabled={busy || !reload.valid}
             title={reload.reason ?? "Reload crossbow"}
-            onClick={() => void controller.reload()}
+            onPointerDown={(e) => { touchPress.current = e.pointerType === "touch"; }}
+            onClick={() => {
+              if (touchPress.current) {
+                touchPress.current = false;
+                controller.tapAction("reload");
+              } else void controller.reload();
+            }}
           >
             Reload · {reload.apCost} AP <kbd>R</kbd>
           </button>
@@ -87,14 +96,20 @@ export function WeaponControls({
         </div>
       )}
       <div
-        onMouseEnter={() => store.setState({ actionHover: "swap" })}
-        onMouseLeave={() => store.setState({ actionHover: null })}
+        onPointerEnter={(e) => { if (e.pointerType !== "touch") store.setState({ actionHover: "swap" }); }}
+        onPointerLeave={(e) => { if (e.pointerType !== "touch") store.setState({ actionHover: null }); }}
       >
         <button
           data-testid="swap"
           disabled={busy || !swap.valid}
           title={swap.reason ?? "Swap weapons"}
-          onClick={() => void controller.swapWeapon()}
+          onPointerDown={(e) => { touchPress.current = e.pointerType === "touch"; }}
+          onClick={() => {
+            if (touchPress.current) {
+              touchPress.current = false;
+              controller.tapAction("swap");
+            } else void controller.swapWeapon();
+          }}
         >
           Swap · {swap.apCost} AP <kbd>W</kbd>
         </button>
@@ -113,9 +128,8 @@ export function WeaponControls({
             <div key={id}>
               <button
                 disabled={busy || !!reason}
-                onClick={() =>
-                  controller.setMode({ kind: "skill", skillId: id })
-                }
+                onClick={() => controller.toggleSkill(id)}
+                aria-pressed={mode.kind === "skill" && mode.skillId === id}
                 title={`${def.description} · Concept: ${def.provenance.concept}; numbers: ${def.provenance.numbers}`}
                 className={
                   mode.kind === "skill" && mode.skillId === id ? "on" : ""

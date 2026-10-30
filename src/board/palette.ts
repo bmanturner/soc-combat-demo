@@ -22,6 +22,8 @@ export const COLORS = {
   move: '#4fa3ff',
   aim: '#ffb347',
   engage: '#ff8a65',
+  ready: '#7bc47f',
+  caught: '#ffb3a6',
 } as const;
 
 export function hex(color: string): number {

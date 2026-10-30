@@ -12,7 +12,7 @@ import { occupant, unitById } from '../rules/state';
 import type { Action, BattleState, GameEvent } from '../rules/types';
 import { shareUrl } from './share';
 import { attackFailureReason } from './attack-reason';
-import { BOARD_VIEW_KEY, showToast, store, type BoardViewKind, type LogLine, type Mode } from './store';
+import { BOARD_VIEW_KEY, TELEGRAPH_GUIDE_KEY, showToast, store, type ActionHover, type BoardViewKind, type LogLine, type Mode } from './store';
 
 export interface Animator {
   play(events: GameEvent[], before: BattleState, after: BattleState, speed: number): Promise<void>;
@@ -36,6 +36,20 @@ let battleToken = 0;
 let releaseAnimation: (() => void) | null = null;
 let transaction: Promise<void> | null = null;
 let loopingToken: number | null = null;
+/**
+ * Touch has no hover. The first tap previews exactly what a mouse hover shows and arms it here;
+ * a second tap on the same target commits only if the battle state and selected mode are the same objects as when it was armed.
+ */
+let touchArm: { battle: BattleState | null; mode: Mode; tile: Vec | null; action: ActionHover } | null = null;
+
+/** Save a per-browser preference; if storage is blocked (private mode) the choice still applies this session. */
+function persist(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignored: session-only preference.
+  }
+}
 
 function cancelBattle(): void {
   battleToken += 1;
@@ -118,7 +132,7 @@ async function apply(action: Action): Promise<boolean> {
     throw err;
   }
   const token = battleToken;
-  store.setState({ busy: true, hoverTile: null });
+  store.setState({ busy: true, hoverTile: null, actionHover: null });
   let release!: () => void;
   const cancelled = new Promise<void>(resolve => { release = resolve; });
   releaseAnimation = release;
@@ -225,6 +239,12 @@ export const controller = {
     store.setState({ mode, actionHover: null, ...(mode.kind === 'attack' && mode.modeId === 'sweep' && u ? { hoverTile: u.pos } : {}) });
   },
 
+  /** Select a skill to aim it; selecting the already-aimed skill again cancels back to move. */
+  toggleSkill(skillId: string): void {
+    const mode = store.getState().mode;
+    controller.setMode(mode.kind === 'skill' && mode.skillId === skillId ? { kind: 'move' } : { kind: 'skill', skillId });
+  },
+
   cycleMode(): void {
     const s = store.getState(), u = activePlayer(s.battle);
     if (!s.battle || !u) return;
@@ -253,11 +273,13 @@ export const controller = {
   /** Switch board renderer; a pending animation is cancelled by the outgoing board and the action still commits. */
   setBoardView(boardView: BoardViewKind): void {
     store.setState({ boardView });
-    try {
-      localStorage.setItem(BOARD_VIEW_KEY, boardView);
-    } catch {
-      // Storage may be unavailable (private mode); the choice still applies for this session.
-    }
+    persist(BOARD_VIEW_KEY, boardView);
+  },
+
+  /** Finish or skip the first-telegraph guide (done) or queue it to replay at the next telegraph (not done). */
+  setTelegraphGuideDone(done: boolean): void {
+    store.setState({ telegraphGuideDone: done });
+    persist(TELEGRAPH_GUIDE_KEY, done ? 'done' : 'pending');
   },
 
   setBotParty(on: boolean): void {
@@ -284,6 +306,33 @@ export const controller = {
 
   hoverUnit(id: string | null): void {
     store.setState({ hoverUnitId: id });
+  },
+
+  /** Touch tap on a board tile: preview it (as hover would), or commit it if this exact preview is already armed. */
+  tapTile(tile: Vec): void {
+    const s = store.getState();
+    const armed = touchArm;
+    if (armed?.tile && eq(armed.tile, tile) && armed.battle === s.battle && armed.mode === s.mode && s.hoverTile && eq(s.hoverTile, tile)) {
+      touchArm = null;
+      void controller.clickTile(tile);
+      return;
+    }
+    touchArm = { battle: s.battle, mode: s.mode, tile, action: null };
+    if (s.actionHover) store.setState({ actionHover: null });
+    controller.hover(tile);
+  },
+
+  /** Touch tap on Reload/Swap: preview it (as hover would), or commit it if that preview is already armed. */
+  tapAction(action: 'reload' | 'swap'): void {
+    const s = store.getState();
+    const armed = touchArm;
+    if (armed?.action === action && armed.battle === s.battle && armed.mode === s.mode && s.actionHover === action) {
+      touchArm = null;
+      void (action === 'reload' ? controller.reload() : controller.swapWeapon());
+      return;
+    }
+    touchArm = { battle: s.battle, mode: s.mode, tile: null, action };
+    store.setState({ actionHover: action, hoverTile: null, hoverUnitId: null });
   },
 
   async clickTile(tile: Vec): Promise<void> {

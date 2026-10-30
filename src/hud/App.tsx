@@ -1,5 +1,5 @@
-import { GranaryGuide } from './Guidance';
-import { useEffect } from 'react';
+import { GranaryGuide, TelegraphGuide } from './Guidance';
+import { useEffect, useRef, useState } from 'react';
 import { controller } from '../game/controller';
 import { activePlayer } from '../game/preview';
 import { store } from '../game/store';
@@ -18,13 +18,21 @@ function TopBar() {
   const seed = useGame((s) => s.seed);
   const view = useGame((s) => s.boardView);
   const enc = encounterById(encounterId);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const bar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (e: PointerEvent) => { if (!bar.current?.contains(e.target as Node)) setMenuOpen(false); };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [menuOpen]);
   return (
-    <header className="topbar">
+    <header ref={bar} className={`topbar${menuOpen ? ' menu-open' : ''}`}>
       <button onClick={() => controller.openMenu()} title="Back to encounters">☰</button>
       <div className="tb-title">
         <b>{enc.name}</b> <span className="muted">{enc.subtitle} · seed {seed}</span>
       </div>
-      <div className="tb-right">
+      <div className="tb-right" onClick={(e) => { if ((e.target as HTMLElement).closest('button')) setMenuOpen(false); }}>
         <div className="view-toggle" role="group" aria-label="Board view">
           {(['2d', '3d'] as const).map((v) => (
             <button key={v} className={view === v ? 'on' : ''} aria-pressed={view === v} onClick={() => controller.setBoardView(v)} data-testid={`view-${v}`} title={v === '3d' ? 'three.js 3D board' : 'Phaser 2D board'}>
@@ -34,7 +42,7 @@ function TopBar() {
         </div>
         <label title="Animation speed">
           Speed
-          <select value={speed} onChange={(e) => controller.setSpeed(Number(e.target.value))}>
+          <select aria-label="Animation speed" value={speed} onChange={(e) => controller.setSpeed(Number(e.target.value))}>
             <option value={0.5}>0.5×</option>
             <option value={1}>1×</option>
             <option value={2}>2×</option>
@@ -48,24 +56,43 @@ function TopBar() {
         <button onClick={() => store.setState({ settingsOpen: true })} data-testid="open-settings">Rules</button>
         <button onClick={() => store.setState({ helpOpen: true })}>?</button>
       </div>
+      <button className="tb-menu-toggle" aria-label="Game options" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)} data-testid="topbar-menu">⋯</button>
     </header>
   );
 }
 
+/** Compact layouts only (hidden on desktop): switch between the action and intel panels, and expand the portrait sheet. */
+function SheetTabs() {
+  const tab = useGame((s) => s.sheetTab);
+  const open = useGame((s) => s.sheetOpen);
+  const threats = useGame((s) => s.battle?.effects.length ?? 0);
+  return (
+    <div className="sheet-tabs" aria-label="Battle panels">
+      <button className={tab === 'actions' ? 'on' : ''} aria-pressed={tab === 'actions'} onClick={() => store.setState({ sheetTab: 'actions' })} data-testid="tab-actions">Actions</button>
+      <button className={tab === 'intel' ? 'on' : ''} aria-pressed={tab === 'intel'} onClick={() => store.setState({ sheetTab: 'intel' })} data-testid="tab-intel">Incoming & log{threats > 0 ? ` · ${threats}` : ''}</button>
+      <button className="sheet-toggle" aria-expanded={open} onClick={() => store.setState({ sheetOpen: !open })} data-testid="sheet-toggle">{open ? 'Less ▾' : 'More ▴'}</button>
+    </div>
+  );
+}
+
 function Battle() {
+  const tab = useGame((s) => s.sheetTab);
+  const open = useGame((s) => s.sheetOpen);
   return (
     <div className="battle" data-testid="battle">
       <TopBar />
       <Timeline />
       <GranaryGuide />
-      <div className="battle-main">
+      <div className={`battle-main tab-${tab}${open ? ' sheet-open' : ''}`}>
         <ActionPanel />
         <BoardHost />
         <aside className="panel right">
+          <TelegraphGuide />
           <IncomingPanel />
           <div className="section-title">Combat log</div>
           <CombatLog />
         </aside>
+        <SheetTabs />
       </div>
       <ResultOverlay />
     </div>
@@ -98,7 +125,7 @@ export function App() {
       else if (e.key.toLowerCase() === 't') { e.preventDefault(); controller.cycleMode(); }
       else if (/^[1-9]$/.test(e.key)) {
         const skill = u.skills[Number(e.key) - 1];
-        if (skill) controller.setMode({ kind: 'skill', skillId: skill.id });
+        if (skill) controller.toggleSkill(skill.id);
       }
     };
     window.addEventListener('keydown', onKey);

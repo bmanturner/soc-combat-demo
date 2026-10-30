@@ -1,9 +1,23 @@
 import { useStore } from 'zustand';
-import { useEffect, useRef } from 'react';
-import { store, type GameStore } from '../game/store';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { TOUCH_UI_QUERY, store, type GameStore } from '../game/store';
 
 export function useGame<T>(selector: (s: GameStore) => T): T {
   return useStore(store, selector);
+}
+
+let touchQuery: MediaQueryList | null = null;
+const touchMedia = (): MediaQueryList | null =>
+  touchQuery ?? (typeof matchMedia === 'function' ? (touchQuery = matchMedia(TOUCH_UI_QUERY)) : null);
+const subscribeTouch = (cb: () => void) => {
+  const q = touchMedia();
+  q?.addEventListener('change', cb);
+  return () => q?.removeEventListener('change', cb);
+};
+
+/** The primary input cannot hover (phone, tablet): copy should say "tap", and taps preview before committing. */
+export function useTouchUI(): boolean {
+  return useSyncExternalStore(subscribeTouch, () => touchMedia()?.matches ?? false, () => false);
 }
 
 /** Focus the dialog itself (Space must not activate its first button), trap Tab, restore opener. */

@@ -9,7 +9,7 @@ import { unitById } from '../rules/state';
 import type { BattleState, UnitState } from '../rules/types';
 import { controller } from '../game/controller';
 import { activePlayer, endTurnPreview, pendingFor } from '../game/preview';
-import { ap, pct, useGame } from './hooks';
+import { ap, pct, useGame, useTouchUI } from './hooks';
 
 import { PATTERN_TEXT, selectedWeaponMode } from '../game/weapon-summary';
 
@@ -78,6 +78,7 @@ export function ActionPanel() {
   const hoverUnitId = useGame((s) => s.hoverUnitId);
   const hoverTile = useGame(s => s.hoverTile);
   const actionHover = useGame(s => s.actionHover);
+  const touch = useTouchUI();
   if (!battle) return null;
   const u = activePlayer(battle);
   const a = battle.active;
@@ -123,7 +124,11 @@ export function ActionPanel() {
             {end?.danger === 'hit' && <div className="warn">No escape if you stop here</div>}
             {end?.danger === 'risk' && <div className="warn">Escape risk, check the timeline</div>}
           </button>
-          <div className="hint">{mode.kind === 'move' ? 'Click a blue tile to move, or an enemy to attack it. Right-click cancels.' : mode.kind === 'attack' ? (u.attack.pattern === 'dualArc' ? 'Solid = primary. Dashed = one random surviving enemy; the primary can be picked again.' : 'Click a tile to aim; T cycles attack modes. Sweep can target yourself.') : 'Click a highlighted target.'}</div>
+          <div className="hint">{mode.kind === 'move'
+            ? (touch ? 'Tap a blue tile or an enemy to preview it, then tap it again to commit. Swap and Reload preview on the first tap too.' : 'Click a blue tile to move, or an enemy to attack it. Right-click cancels.')
+            : mode.kind === 'attack'
+              ? (u.attack.pattern === 'dualArc' ? 'Solid = primary. Dashed = one random surviving enemy; the primary can be picked again.' : touch ? 'Tap a tile to aim and preview, then tap it again to commit. Sweep can target yourself.' : 'Click a tile to aim; T cycles attack modes. Sweep can target yourself.')
+              : (touch ? 'Tap a highlighted target to preview, then tap it again to commit. Tap the skill again to cancel.' : 'Click a highlighted target. Click the skill again, press Esc or right-click to cancel.')}</div>
         </div>
       ) : (
         <div className="turn-box waiting">{battle.outcome !== 'ongoing' ? 'Battle over' : acting ? `${acting.name} is acting…` : '…'}</div>

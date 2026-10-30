@@ -13,6 +13,7 @@ A browser sandbox for Aaron to play and tune AP-timeline tactics before a full e
 - **Rules tuning:** grouped controls cover timeline, movement, engagement, flanking, reactions, damage, boss behavior, Weapons, **Weapon tuning** and **Enemy tuning**. Badges distinguish *Aaron's rule*, *Tentative math* and *Demo default*, with rationale. Weapon/skill/unit/armor data separates sourced concepts from tentative/demo numbers. Not every design question is an exposed control; changing fight rules restarts the fight.
 - **Feedback:** result reports include telemetry, config changes and a setup link. Share links reproduce **encounter, two-slot loadout, seed and rules — not an action replay**. The same seed only reproduces a fight when the action sequence also matches. Human play and expert/novice bot policies are distinct balance samples.
 - **2D or 3D board:** the top-bar **2D / 3D** toggle switches between the Phaser board and a three.js board (remembered per browser, not part of share links). Both draw the same overlays, labels and event choreography; 3D adds orbit (drag) and zoom (wheel). A drag never commits; click in place to act.
+- **Phones and tablets:** portrait stacks the timeline, board and a collapsible Actions / Incoming & log panel, with game options behind the **⋯** menu; landscape puts the board left and the HUD right. On touch, the first tap on a tile, Swap or Reload previews it (path, AP, odds, timeline ghost, danger), and a second tap on the same target commits. Mouse keeps single-click commit.
 
 ## Run and verify
 

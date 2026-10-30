@@ -1,5 +1,15 @@
 // Human-readable combat log lines. Formatting never changes simulation values.
-import type { BattleState, GameEvent } from './types';
+import type { BattleState, CaughtReason, GameEvent } from './types';
+
+/** Why a party member was caught, in the log's voice. */
+function caughtWhy(reason: CaughtReason, nextTurnAt: number, impactAt: number): string {
+  switch (reason) {
+    case 'late': return `next turn @${formatAp(nextTurnAt)} came after impact @${formatAp(impactAt)}`;
+    case 'trapped': return 'no clear tile within reach on their turn';
+    case 'held': return 'held by engagement while leaving';
+    case 'stayed': return 'ended their turn inside';
+  }
+}
 
 /** AP, HP and damage: at most one decimal, no trailing zero or negative zero. */
 export const formatNumber = (n: number | undefined): string => n === undefined ? '?' : String(Number(n.toFixed(1)));
@@ -44,10 +54,16 @@ export function describeEvent(state: BattleState, e: GameEvent): string | null {
       return `${n(e.unitId)} is ${e.reason === 'push' ? 'shoved' : e.reason === 'pull' ? 'dragged' : 'moved'} to ${DIR(e.to)}`;
     case 'effectCast':
       return `⚠ ${e.effect.name} telegraphed on ${e.effect.tiles.length} tiles: lands in ${formatAp(e.effect.resolveAt - e.effect.castAt)} AP (@${formatAp(e.effect.resolveAt)})`;
-    case 'effectResolve':
-      return e.hits.length
-        ? `✸ ${e.name} lands: ${e.hits.map((h) => h.avoided ? `${n(h.unitId)} ${h.avoided.toUpperCase()}` : `${n(h.unitId)} −${formatNumber(h.damage)} (HP ${formatNumber(h.hpAfter)})`).join(', ')}`
-        : `✸ ${e.name} lands on empty ground`;
+    case 'effectResolve': {
+      const party = (id: string) => state.units.find((u) => u.id === id)?.side === 'player';
+      const hits = e.hits.map((h) => {
+        if (h.avoided) return `${n(h.unitId)} ${h.avoided.toUpperCase()}`;
+        const why = h.caught && party(h.unitId) ? ` — caught: ${caughtWhy(h.caught.reason, h.caught.nextTurnAt, e.at)}` : '';
+        return `${n(h.unitId)} −${formatNumber(h.damage)} (HP ${formatNumber(h.hpAfter)})${why}`;
+      });
+      const escaped = e.escaped.filter(party).map((id) => `${n(id)} escaped`);
+      return `✸ ${e.name} lands${hits.length ? `: ${hits.join(', ')}` : ' on empty ground'}${escaped.length ? ` · ${escaped.join(', ')}` : ''}`;
+    }
     case 'turnEnd':
       return `  ${n(e.unitId)} spent ${formatAp(e.spent)} AP → next turn in ${formatAp(e.delay)} AP`;
     case 'outcome':

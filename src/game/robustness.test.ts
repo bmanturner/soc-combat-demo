@@ -14,6 +14,19 @@ beforeEach(() => {
 });
 afterEach(() => { controller.openMenu(); registerAnimator(null); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+describe('skill selection', () => {
+  it('selecting the aimed skill again cancels it, while another skill switches without cancelling', () => {
+    const [first, second] = store.getState().battle!.units.find((u) => u.id === 'jubal')!.skills;
+    controller.toggleSkill(first!.id);
+    expect(store.getState().mode).toEqual({ kind: 'skill', skillId: first!.id });
+    controller.toggleSkill(second!.id);
+    expect(store.getState().mode).toEqual({ kind: 'skill', skillId: second!.id });
+    controller.toggleSkill(second!.id);
+    expect(store.getState().mode).toEqual({ kind: 'move' });
+    expect(store.getState().actions).toEqual([]);
+  });
+});
+
 describe('controller transaction regressions', () => {
   it('U-02 immediate bot handoff after restart cannot lose the loop wakeup', async () => {
     controller.restart();
@@ -97,5 +110,55 @@ describe('U-03 hostile share input', () => {
   });
   it.each(['%%%', btoa('null'), btoa('[]'), btoa('{"__proto__":{"polluted":true},"movementBudget":80}'), 'a'.repeat(20000)])('rejects garbage config', c => {
     expect(decodeShare('#c=' + c).config).toEqual(DEFAULT_CONFIG);
+  });
+});
+
+describe('touch taps', () => {
+  const jubal = () => store.getState().battle!.units.find((u) => u.id === 'jubal')!;
+
+  it('the first tap previews a tile; a second tap on it commits', async () => {
+    controller.tapTile({ x: 4, y: 4 });
+    expect(store.getState().hoverTile).toEqual({ x: 4, y: 4 });
+    expect(store.getState().actions).toEqual([]);
+    controller.tapTile({ x: 4, y: 4 });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(store.getState().actions).toHaveLength(1);
+    expect(jubal().pos).toEqual({ x: 4, y: 4 });
+  });
+
+  it('tapping a different tile or changing mode re-arms instead of committing', async () => {
+    controller.tapTile({ x: 4, y: 4 });
+    controller.tapTile({ x: 5, y: 4 });
+    expect(store.getState().actions).toEqual([]);
+    expect(store.getState().hoverTile).toEqual({ x: 5, y: 4 });
+    controller.setMode({ kind: 'attack' });
+    controller.setMode({ kind: 'move' });
+    controller.tapTile({ x: 5, y: 4 });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(store.getState().actions).toEqual([]);
+    controller.tapTile({ x: 5, y: 4 });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(store.getState().actions).toHaveLength(1);
+  });
+
+  it('a mouse hover never arms a tap commit', async () => {
+    controller.hover({ x: 4, y: 4 });
+    controller.tapTile({ x: 4, y: 4 });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(store.getState().actions).toEqual([]);
+  });
+
+  it('Swap previews on the first tap and commits on the second', async () => {
+    controller.openSetup('wolves');
+    controller.setLoadout({ weaponId: 'daggers', secondaryWeaponId: 'shield' });
+    controller.startBattle();
+    expect(store.getState().battle!.active?.unitId).toBe('jubal');
+    controller.tapAction('swap');
+    expect(store.getState().actionHover).toBe('swap');
+    expect(store.getState().actions).toEqual([]);
+    controller.tapAction('swap');
+    await vi.advanceTimersByTimeAsync(10);
+    expect(store.getState().actions.at(-1)?.type).toBe('swapWeapon');
+    expect(store.getState().actionHover).toBeNull();
   });
 });

@@ -6,6 +6,7 @@ import { aimDirection, patternTiles } from '../rules/patterns';
 import { attackModes } from '../rules/equipment';
 import { cheb, eq, key, type Vec } from '../rules/geometry';
 import { attackOptions, bossSweepThreat, engagedPairs, pathSafety, previewAttack, previewSkill, reachable, skillOptions, type AttackPreview } from '../rules/queries';
+import { effectCanHit } from '../rules/resolvers';
 import { alive, isFlanked, lineOfSight, terrainAt, tilesOf, unitById } from '../rules/state';
 import type { BattleState, UnitState } from '../rules/types';
 import { pendingFor } from '../game/preview';
@@ -78,7 +79,14 @@ export interface BoardView {
   labels: Label[];
 }
 
-export type BoardViewInput = Pick<GameStore, 'battle' | 'hoverTile' | 'hoverUnitId' | 'mode' | 'busy' | 'botParty'>;
+/** Every store field `boardView` reads; boards redraw overlays exactly when one of these changes. */
+const VIEW_INPUTS = ['battle', 'hoverTile', 'hoverUnitId', 'mode', 'busy', 'botParty'] as const satisfies readonly (keyof GameStore)[];
+
+export type BoardViewInput = Pick<GameStore, (typeof VIEW_INPUTS)[number]>;
+
+export function boardViewChanged(s: BoardViewInput, prev: BoardViewInput): boolean {
+  return VIEW_INPUTS.some((k) => s[k] !== prev[k]);
+}
 
 /** Reference tile size (px) for converting nominal pixel widths into tile units. */
 export const REFERENCE_TILE = 56;
@@ -192,8 +200,9 @@ export function boardView(s: BoardViewInput): BoardView {
   if (s.mode.kind === 'move') {
     const reach = reachable(b, u.id);
     const tiles = [...reach.values()].map((r) => r.path[r.path.length - 1]!).filter((p) => !eq(p, u.pos));
-    // Reach is the quietest overlay: a light wash plus the perimeter below. It skips telegraphed tiles so Path Blue never mixes with the red zone.
-    const telegraphed = new Set(b.effects.flatMap((e) => e.tiles.map(key)));
+    // Reach is the quietest overlay: a light wash plus the perimeter below. The wash marks tiles safe to end on, so it
+    // skips tiles inside any telegraph that can hit this unit; Path Blue never mixes with the red zone.
+    const telegraphed = new Set(b.effects.filter((e) => effectCanHit(b, e, u)).flatMap((e) => e.tiles.map(key)));
     fill('overlay', tiles.filter((p) => !telegraphed.has(key(p))), COLORS.move, 0.16);
     // Path Blue perimeter: edges between a reachable tile and a non-reachable / out-of-map neighbour.
     const inReach = new Set([key(u.pos), ...tiles.map(key)]);

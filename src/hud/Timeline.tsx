@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { breakFreeAt } from '../rules/engine';
 import { bossSweepThreat, timelineEntries } from '../rules/queries';
 import { controller } from '../game/controller';
@@ -46,7 +47,7 @@ export function Timeline() {
           </span>
         )}
       </div>
-      <div className="tl-track" style={{ height: `${124 + entries.filter(e => e.kind !== 'unit' && e.at <= SPAN).length * 19}px` }}>
+      <div className="tl-track" style={{ '--tl-effects': entries.filter(e => e.kind !== 'unit' && e.at <= SPAN).length } as CSSProperties}>
         {ticks.map((t) => (
           <div key={t} className={`tl-tick ${t % 50 === 0 ? 'major' : ''}`} style={{ left: pos(t) }}>
             {t % 50 === 0 && <span>{t}</span>}
@@ -67,7 +68,7 @@ export function Timeline() {
         {entries
           .filter((e) => e.kind !== 'unit' && e.at <= SPAN)
           .map((e, i) => (
-            <div key={`tag-${e.id}`} className="tl-effect-tag" style={{ left: pos(Math.min(e.at, 240)), top: `${108 + i * 19}px` }}>
+            <div key={`tag-${e.id}`} className="tl-effect-tag" style={{ left: pos(Math.min(e.at, 240)), '--tl-i': i } as CSSProperties}>
               {e.label} lands · {Math.round(e.at)}
             </div>
           ))}

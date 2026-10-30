@@ -7,10 +7,11 @@ import { breakFreeAt } from '../rules/engine';
 import type { Vec } from '../rules/geometry';
 import type { BattleState, GameEvent, UnitState } from '../rules/types';
 import { controller, registerAnimator, unregisterAnimator, type Animator } from '../game/controller';
+import { registerBoardProjector, unregisterBoardProjector } from '../game/board-anchor';
 import { store, type GameStore } from '../game/store';
 import { choreograph, type Ease, type Stage } from './choreography';
 import { COLORS, hex } from './palette';
-import { boardView, footprintSize, unitCenter, type FillLayer, type LineLayer, type Pt } from './view-model';
+import { boardView, boardViewChanged, footprintSize, unitCenter, type FillLayer, type LineLayer, type Pt } from './view-model';
 
 interface Token {
   root: Phaser.GameObjects.Container;
@@ -88,7 +89,8 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
     this.tweens.add({ targets: this.layers.telegraph, alpha: { from: 1, to: 0.55 }, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     this.input.mouse?.disableContextMenu();
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => controller.hover(this.tileAt(p.x, p.y)));
+    // Touch has no hover: a finger drag never previews, and taps preview through controller.tapTile.
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => { if (!p.wasTouch) controller.hover(this.tileAt(p.x, p.y)); });
     this.input.on('gameout', () => controller.hover(null));
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (p.rightButtonDown()) {
@@ -96,7 +98,9 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
         return;
       }
       const t = this.tileAt(p.x, p.y);
-      if (t) void controller.clickTile(t);
+      if (!t) return;
+      if (p.wasTouch) controller.tapTile(t);
+      else void controller.clickTile(t);
     });
     this.scale.on('resize', () => this.rebuild());
     this.unsub = store.subscribe((s, prev) => {
@@ -108,11 +112,14 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
       }
     });
     registerAnimator(this);
+    const project = (p: Pt) => this.px(p);
+    registerBoardProjector(project);
     const cleanup = () => {
       this.cancel();
       this.unsub?.();
       this.unsub = null;
       unregisterAnimator(this);
+      unregisterBoardProjector(project);
     };
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
@@ -153,8 +160,8 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
     const w = this.scale.width;
     const h = this.scale.height;
     // Labels sit beside their tiles; the top strip is only an overflow lane.
-    const lane = 48;
-    this.tile = Math.max(28, Math.floor(Math.min((w - 24) / b.map.width, (h - lane - 12) / b.map.height)));
+    const lane = Math.min(48, Math.round(h * 0.1));
+    this.tile = Math.max(20, Math.floor(Math.min((w - 24) / b.map.width, (h - lane - 12) / b.map.height)));
     this.tile = Math.min(this.tile, 132);
     this.ox = Math.floor((w - this.tile * b.map.width) / 2);
     this.oy = lane + Math.max(0, Math.floor((h - lane - 12 - this.tile * b.map.height) / 2));
@@ -178,7 +185,7 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
       this.rebuild();
       return;
     }
-    if (s.battle !== prev.battle || s.hoverTile !== prev.hoverTile || s.hoverUnitId !== prev.hoverUnitId || s.mode !== prev.mode || s.busy !== prev.busy) {
+    if (boardViewChanged(s, prev)) {
       this.refresh();
     }
   }

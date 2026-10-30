@@ -125,7 +125,7 @@ it('X-09: all AP/damage log variants trim floating-point noise consistently', ()
     { t: 'swapWeapon', unitId: 'jubal', oldName: 'a', newName: 'b', slot: 1, apCost: value },
     { t: 'status', unitId: 'jubal', status: 'dazed', pushback: value },
     { t: 'effectCast', effect },
-    { t: 'effectResolve', effectId: effect.id, name: effect.name, tiles: [], hits: [{ unitId: 'jubal', damage: value, hpAfter: value }] },
+    { t: 'effectResolve', effectId: effect.id, name: effect.name, tiles: [], at: effect.resolveAt, hits: [{ unitId: 'jubal', damage: value, hpAfter: value }], escaped: [] },
     { t: 'strike', attackerId: 'wolf', targetId: 'jubal', hitChance: 1, hitRoll: 1, hit: true, reactions: [], avoided: null, raw: value, damage: value, effectiveDefense: value, hpAfter: value },
   ];
   for (const event of events) {

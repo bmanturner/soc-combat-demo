@@ -7,10 +7,11 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import type { Vec } from '../rules/geometry';
 import type { BattleState, GameEvent, UnitState } from '../rules/types';
 import { controller, registerAnimator, unregisterAnimator, type Animator } from '../game/controller';
-import { store, type GameStore } from '../game/store';
+import { registerBoardProjector, unregisterBoardProjector } from '../game/board-anchor';
+import { TOUCH_UI_QUERY, store, type GameStore } from '../game/store';
 import { choreograph, type Ease, type Stage } from '../board/choreography';
 import { COLORS } from '../board/palette';
-import { boardView, unitCenter, type FillLayer, type LineLayer, type Pt } from '../board/view-model';
+import { boardView, boardViewChanged, unitCenter, type FillLayer, type LineLayer, type Pt } from '../board/view-model';
 import { GroundShape, PAWN_HEIGHT, PX, applyOpacity, makeToken, overlayMaterial, paintToken, type Token3D } from './meshes';
 import { makeProjectile } from './projectiles';
 import type { Projectile } from './rig';
@@ -24,6 +25,7 @@ const LAYER_ORDER: Record<FillLayer | LineLayer, number> = { zone: 1, telegraph:
 /** Default camera direction: from the south (toward smaller y is "up"), 35° off vertical so pawns clear the walls. */
 const HOME_DIRECTION = new THREE.Vector3(0, Math.cos((35 * Math.PI) / 180), Math.sin((35 * Math.PI) / 180));
 const CLICK_SLOP = 5;
+const TOUCH_SLOP = 10; // fingers jitter more than a mouse; still well under an orbit drag
 
 interface Rect {
   x: number;
@@ -113,6 +115,7 @@ export class ThreeBoard implements Animator, Stage {
   private last = performance.now();
   private frame = 0;
   private pressed: { x: number; y: number } | null = null;
+  private downIds = new Set<number>();
   private animating = false;
   private animationJobs = new Set<() => void>();
   private animationEpoch = 0;
@@ -140,7 +143,7 @@ export class ThreeBoard implements Animator, Stage {
     this.floatLayer = el('div', 'board3d-floats');
     this.chrome = el('div', 'board3d-chrome');
     const hint = el('span', 'board3d-hint');
-    hint.textContent = 'Drag to orbit · wheel to zoom';
+    hint.textContent = matchMedia(TOUCH_UI_QUERY).matches ? 'Drag to orbit · pinch to zoom' : 'Drag to orbit · wheel to zoom';
     const reset = el('button', 'board3d-reset');
     reset.textContent = 'Reset view';
     reset.dataset.testid = 'board3d-reset';
@@ -175,6 +178,7 @@ export class ThreeBoard implements Animator, Stage {
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('pointerup', this.onPointerUp);
     canvas.addEventListener('pointerleave', this.onPointerLeave);
+    canvas.addEventListener('pointercancel', this.onPointerCancel);
     canvas.addEventListener('contextmenu', this.onContextMenu);
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -189,6 +193,7 @@ export class ThreeBoard implements Animator, Stage {
       }
     });
     registerAnimator(this);
+    registerBoardProjector(this.project);
     this.version = store.getState().boardVersion;
 
     // Test hooks shared with the 2D board: canvas-relative pixel center of a tile; label/unit boxes.
@@ -209,6 +214,7 @@ export class ThreeBoard implements Animator, Stage {
     this.cancel();
     this.unsub();
     unregisterAnimator(this);
+    unregisterBoardProjector(this.project);
     cancelAnimationFrame(this.frame);
     this.resizeObserver.disconnect();
     const w = window as unknown as { __soc?: Record<string, unknown> };
@@ -241,6 +247,8 @@ export class ThreeBoard implements Animator, Stage {
     const p = v.clone().project(this.camera);
     return { x: ((p.x + 1) / 2) * this.width, y: ((1 - p.y) / 2) * this.height };
   }
+
+  private project = (p: Pt) => this.screen(this.world(p));
 
   private tileCenterHook = (x: number, y: number) => this.screen(this.world({ x: x + 0.5, y: y + 0.5 }));
 
@@ -340,7 +348,7 @@ export class ThreeBoard implements Animator, Stage {
       this.rebuild();
       return;
     }
-    if (s.battle !== prev.battle || s.hoverTile !== prev.hoverTile || s.hoverUnitId !== prev.hoverUnitId || s.mode !== prev.mode || s.busy !== prev.busy) {
+    if (boardViewChanged(s, prev)) {
       this.refresh();
     }
   }
@@ -662,29 +670,44 @@ export class ThreeBoard implements Animator, Stage {
   }
 
   private onPointerMove = (e: PointerEvent) => {
+    // Touch has no hover: a finger drag orbits, and taps preview through controller.tapTile.
+    if (e.pointerType === 'touch') return;
     controller.hover(this.pickTile(e));
   };
 
   private onPointerDown = (e: PointerEvent) => {
+    if (e.isPrimary) this.downIds.clear();
+    this.downIds.add(e.pointerId);
     if (e.button === 2) {
       controller.setMode({ kind: 'move' });
       return;
     }
-    if (e.button === 0) this.pressed = { x: e.clientX, y: e.clientY };
+    // A second finger turns the gesture into a pinch or orbit, never a tap.
+    this.pressed = e.button === 0 && this.downIds.size === 1 ? { x: e.clientX, y: e.clientY } : null;
   };
 
   private onPointerUp = (e: PointerEvent) => {
+    this.downIds.delete(e.pointerId);
     const start = this.pressed;
     this.pressed = null;
-    // A drag orbits the camera; only a press-and-release in place commits a tile.
-    if (e.button !== 0 || !start || Math.hypot(e.clientX - start.x, e.clientY - start.y) > CLICK_SLOP) return;
+    const touch = e.pointerType === 'touch';
+    // A drag orbits the camera; only a press-and-release in place commits (mouse) or previews/commits (touch) a tile.
+    if (e.button !== 0 || !start || Math.hypot(e.clientX - start.x, e.clientY - start.y) > (touch ? TOUCH_SLOP : CLICK_SLOP)) return;
     const t = this.pickTile(e);
-    if (t) void controller.clickTile(t);
+    if (!t) return;
+    if (touch) controller.tapTile(t);
+    else void controller.clickTile(t);
   };
 
-  private onPointerLeave = () => {
+  private onPointerCancel = (e: PointerEvent) => {
+    this.downIds.delete(e.pointerId);
     this.pressed = null;
-    controller.hover(null);
+  };
+
+  private onPointerLeave = (e: PointerEvent) => {
+    this.pressed = null;
+    // Touch fires pointerleave after every lift; only a mouse leaving the board clears the preview.
+    if (e.pointerType !== 'touch') controller.hover(null);
   };
 
   private onContextMenu = (e: Event) => e.preventDefault();

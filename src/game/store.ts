@@ -8,14 +8,19 @@ import type { Action, ArmorClass, BattleState } from '../rules/types';
 export type Mode = { kind: 'move' } | { kind: 'attack'; modeId?: string } | { kind: 'skill'; skillId: string };
 export type ActionHover = 'reload' | 'swap' | null;
 export type BoardViewKind = '2d' | '3d';
+export type SheetTab = 'actions' | 'intel';
 
 export const BOARD_VIEW_KEY = 'soc.boardView';
+/** Devices whose primary input cannot hover (phones, tablets): UI copy says "tap" instead of "click/hover". */
+export const TOUCH_UI_QUERY = '(hover: none) and (pointer: coarse)';
+export const TELEGRAPH_GUIDE_KEY = 'soc.guide.telegraph';
 
-function savedBoardView(): BoardViewKind {
+/** Read a per-browser preference; storage can be missing (tests) or blocked (private mode). */
+function saved(key: string): string | null {
   try {
-    return globalThis.localStorage?.getItem(BOARD_VIEW_KEY) === '3d' ? '3d' : '2d';
+    return globalThis.localStorage?.getItem(key) ?? null;
   } catch {
-    return '2d';
+    return null;
   }
 }
 
@@ -58,6 +63,12 @@ export interface GameStore {
   battleGeneration: number;
   /** Board renderer: Phaser 2D or three.js 3D. Presentation only; not part of share links. */
   boardView: BoardViewKind;
+  /** The first-telegraph guide was finished or skipped in this browser; Help can replay it. */
+  telegraphGuideDone: boolean;
+  /** Which battle panel the compact (phone) layouts show. Presentation only. */
+  sheetTab: SheetTab;
+  /** The portrait bottom panel is expanded. Presentation only. */
+  sheetOpen: boolean;
 }
 
 export const store = createStore<GameStore>(() => ({
@@ -84,7 +95,10 @@ export const store = createStore<GameStore>(() => ({
   toast: null,
   boardVersion: 0,
   battleGeneration: 0,
-  boardView: savedBoardView(),
+  boardView: saved(BOARD_VIEW_KEY) === '3d' ? '3d' : '2d',
+  telegraphGuideDone: saved(TELEGRAPH_GUIDE_KEY) === 'done',
+  sheetTab: 'actions',
+  sheetOpen: false,
 }));
 
 let toastSeq = 0;
