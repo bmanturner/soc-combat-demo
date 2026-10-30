@@ -7,6 +7,7 @@ import type { Vec } from '../rules/geometry';
 import type { UnitState } from '../rules/types';
 import { COLORS } from '../board/palette';
 import { REFERENCE_TILE, footprintSize, type Pt } from '../board/view-model';
+import { makeFigure, type Figure } from './figures';
 
 /** Nominal 2D pixels to tile units. */
 export const PX = 1 / REFERENCE_TILE;
@@ -102,10 +103,16 @@ export interface Token3D {
   /** Hit-flash multiplier. */
   flash: number;
   badge: string;
+  /** Posed unit figure; null for units still drawn as pawns or blocks. */
+  figure: Figure | null;
+  /** Height of the unit's body top, for the plate and rising combat text. */
+  top: number;
 }
 
 const PLATE_W = 256;
 const PLATE_H = 176;
+/** HP bar row on the plate canvas; its backing box ends 24px lower, the plate's lowest painted edge. */
+const PLATE_BAR_Y = 148;
 const FONT = 'Georgia, "Times New Roman", serif';
 const UI_FONT = 'Inter, "Segoe UI", system-ui, sans-serif';
 
@@ -115,9 +122,19 @@ const PAWN = [
 ].map(([r, h]) => new THREE.Vector2(r!, h!));
 
 export const PAWN_HEIGHT = 0.62;
-/** Floating plate sprite size (world units wide) per token kind, and its centre height. */
+/** Floating plate sprite size (world units wide) per token kind. */
 export const PLATE_SCALE = { pawn: 2.0, boss: 2.5 };
-const PLATE_HEIGHT = { pawn: 1.5, boss: 2.7 };
+/** Plate centre above a pawn's top: the HP bar along the plate's lower edge clears the head. */
+const PLATE_CLEARANCE = 0.88;
+/**
+ * Screen-aligned gap (world units) between a figure's top and its plate's lowest edge. Height alone can't clear
+ * figures from a steep camera: their bodies cover ground that projects up into the plate.
+ */
+const FIGURE_PLATE_GAP = 0.42;
+const BOSS_TOP = 1.8;
+const BOSS_PLATE_HEIGHT = 2.7;
+/** Figures are modelled near pawn size; scaled up so their silhouettes read at the default camera distance. */
+const FIGURE_SCALE = 1.35;
 
 export function makeToken(u: UnitState): Token3D {
   const big = u.footprint.length > 1;
@@ -130,28 +147,40 @@ export function makeToken(u: UnitState): Token3D {
     materials.push(m);
     return m;
   };
-  const pickables: THREE.Object3D[] = [];
+  let pickables: THREE.Object3D[] = [];
   let ringGeometry: THREE.BufferGeometry;
   let hoverGeometry: THREE.BufferGeometry;
   let plateHeight: number;
+  let figure: Figure | null;
+  let top = PAWN_HEIGHT;
 
   if (big) {
     const { w, h } = footprintSize(u);
-    const body = new THREE.Mesh(
-      new RoundedBoxGeometry(w - 0.22, 1.25, h - 0.22, 4, 0.14),
-      track(new THREE.MeshStandardMaterial({ color: COLORS.boss, roughness: 0.75, metalness: 0.1 })),
-    );
-    body.position.y = 0.625;
-    const crown = new THREE.Mesh(
-      new RoundedBoxGeometry(w * 0.55, 0.5, h * 0.45, 3, 0.12),
-      track(new THREE.MeshStandardMaterial({ color: '#7a3a2e', roughness: 0.6 })),
-    );
-    crown.position.y = 1.45;
-    for (const m of [body, crown]) {
-      m.castShadow = true;
-      m.receiveShadow = true;
-      root.add(m);
-      pickables.push(m);
+    figure = makeFigure(u);
+    if (figure) {
+      // Built at world size over the whole footprint; the token root sits at the footprint centre.
+      top = figure.height;
+      for (const m of figure.materials) track(m);
+      root.add(figure.object);
+      pickables = figure.meshes;
+    } else {
+      const body = new THREE.Mesh(
+        new RoundedBoxGeometry(w - 0.22, 1.25, h - 0.22, 4, 0.14),
+        track(new THREE.MeshStandardMaterial({ color: COLORS.boss, roughness: 0.75, metalness: 0.1 })),
+      );
+      body.position.y = 0.625;
+      const crown = new THREE.Mesh(
+        new RoundedBoxGeometry(w * 0.55, 0.5, h * 0.45, 3, 0.12),
+        track(new THREE.MeshStandardMaterial({ color: '#7a3a2e', roughness: 0.6 })),
+      );
+      crown.position.y = 1.45;
+      for (const m of [body, crown]) {
+        m.castShadow = true;
+        m.receiveShadow = true;
+        root.add(m);
+        pickables.push(m);
+      }
+      top = BOSS_TOP;
     }
     const shape = new GroundShape();
     shape.frame(-w / 2 + 0.04, -h / 2 + 0.04, w - 0.08, h - 0.08, 0.06);
@@ -159,26 +188,40 @@ export function makeToken(u: UnitState): Token3D {
     const hover = new GroundShape();
     hover.frame(-w / 2 - 0.02, -h / 2 - 0.02, w + 0.04, h + 0.04, 0.04);
     hoverGeometry = groundGeometry(hover);
-    plateHeight = PLATE_HEIGHT.boss;
+    plateHeight = figure ? top : BOSS_PLATE_HEIGHT;
   } else {
-    const pawnMaterial = track(new THREE.MeshStandardMaterial({ color: sideColor, roughness: 0.55, metalness: 0.15 }));
-    const pawn = new THREE.Mesh(new THREE.LatheGeometry(PAWN, 28), pawnMaterial);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 24, 16), pawnMaterial);
-    head.position.y = 0.53;
     const base = new THREE.Mesh(
       new THREE.CylinderGeometry(0.28, 0.3, 0.05, 32),
       track(new THREE.MeshStandardMaterial({ color: u.side === 'player' ? COLORS.partyDark : COLORS.enemyDark, roughness: 0.8 })),
     );
     base.position.y = 0.025;
-    pawn.position.y = 0.05;
-    for (const m of [pawn, head, base]) {
-      m.castShadow = true;
-      root.add(m);
-      pickables.push(m);
+    base.castShadow = true;
+    root.add(base);
+    figure = makeFigure(u);
+    if (figure) {
+      figure.object.position.y = 0.05;
+      figure.object.scale.setScalar(FIGURE_SCALE);
+      top = 0.05 + figure.height * FIGURE_SCALE;
+      for (const m of figure.materials) track(m);
+      root.add(figure.object);
+      // Live list: weapon swaps add and remove figure meshes.
+      figure.meshes.push(base);
+      pickables = figure.meshes;
+    } else {
+      const pawnMaterial = track(new THREE.MeshStandardMaterial({ color: sideColor, roughness: 0.55, metalness: 0.15 }));
+      const pawn = new THREE.Mesh(new THREE.LatheGeometry(PAWN, 28), pawnMaterial);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 24, 16), pawnMaterial);
+      head.position.y = 0.53;
+      pawn.position.y = 0.05;
+      for (const m of [pawn, head]) {
+        m.castShadow = true;
+        root.add(m);
+      }
+      pickables.push(pawn, head, base);
     }
     ringGeometry = new THREE.RingGeometry(0.32, 0.38, 40).rotateX(-Math.PI / 2);
     hoverGeometry = new THREE.RingGeometry(0.41, 0.45, 40).rotateX(-Math.PI / 2);
-    plateHeight = PLATE_HEIGHT.pawn;
+    plateHeight = figure ? top : top + PLATE_CLEARANCE;
   }
 
   const ring = new THREE.Mesh(ringGeometry, track(new THREE.MeshBasicMaterial({ color: sideColor, depthWrite: false, side: THREE.DoubleSide })));
@@ -199,10 +242,12 @@ export function makeToken(u: UnitState): Token3D {
   const plateScale = big ? PLATE_SCALE.boss : PLATE_SCALE.pawn;
   plate.scale.set(plateScale, (plateScale * PLATE_H) / PLATE_W, 1);
   plate.position.y = plateHeight;
+  // Figures: anchor the sprite by its painted lower edge, offset in screen space, so it clears from any orbit angle.
+  if (figure) plate.center.set(0.5, (PLATE_H - PLATE_BAR_Y - 24) / PLATE_H - FIGURE_PLATE_GAP / plate.scale.y);
   plate.renderOrder = 20;
   root.add(ring, hoverRing, plate);
 
-  return { unitId: u.id, root, pickables, ring, hoverRing, plate, plateCanvas, plateTexture, plateKey: '', materials, big, alpha: 1, flash: 1, badge: '' };
+  return { unitId: u.id, root, pickables, ring, hoverRing, plate, plateCanvas, plateTexture, plateKey: '', materials, big, alpha: 1, flash: 1, badge: '', figure, top };
 }
 
 function groundGeometry(shape: GroundShape): THREE.BufferGeometry {
@@ -219,6 +264,7 @@ export function paintToken(tok: Token3D, u: UnitState, active: boolean, hovered:
   tok.hoverRing.visible = hovered && !tok.big;
   tok.alpha = u.ko ? 0.22 : 1;
   applyOpacity(tok);
+  tok.figure?.sync(u);
 
   const key = `${u.hp}/${u.maxHp}|${tok.badge}|${active}|${u.ko}`;
   if (key === tok.plateKey) return;
@@ -267,7 +313,7 @@ export function paintToken(tok: Token3D, u: UnitState, active: boolean, hovered:
     g.fillText(u.glyph, cx, my + 8);
   }
   const bw = tok.big ? 220 : 108;
-  const by = 148;
+  const by = PLATE_BAR_Y;
   const frac = Math.max(0, u.hp / u.maxHp);
   g.fillStyle = 'rgba(0,0,0,0.8)';
   g.fillRect(cx - bw / 2 - 4, by - 4, bw + 8, 28);

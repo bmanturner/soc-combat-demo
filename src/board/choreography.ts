@@ -28,6 +28,13 @@ export interface Stage {
   flashTiles(tiles: Vec[], color: string, alpha: number, ms: number): Promise<void>;
   shake(ms: number, intensity: number): void;
   wait(ms: number): Promise<void>;
+  /**
+   * Optional, for renderers with posed figures: `id` is about to perform the named attack or skill at `target`.
+   * Called just before its lunge or pulse, whose leg lasts `ms`.
+   */
+  strikePose?(id: string, attack: string, target: Pt, ms: number): void;
+  /** Optional: a delayed effect cast by `sourceId` lands now (`ms` is the impact flash). */
+  effectLands?(sourceId: string, effect: string, ms: number): void;
 }
 
 const above = (p: Pt, dy: number): Pt => ({ x: p.x, y: p.y - dy });
@@ -69,12 +76,16 @@ export async function choreograph(stage: Stage, events: GameEvent[], before: Bat
         const u = find(e.attackerId);
         if (!u) break;
         const isAoe = after.effects.some((f) => !before.effects.some((g) => g.id === f.id));
+        const from = unitCenter(u);
+        const to = tileCenter(e.targetTile);
         if (u.footprint.length > 1 || isAoe) {
+          stage.strikePose?.(e.attackerId, e.name, to, 120 * k);
           await stage.pulseToken(e.attackerId, 1.06, 120 * k);
         } else {
-          const from = unitCenter(u);
-          const to = tileCenter(e.targetTile);
-          await stage.lungeToken(e.attackerId, { x: from.x + (to.x - from.x) * 0.32, y: from.y + (to.y - from.y) * 0.32 }, 90 * k);
+          // A third of the way toward the target, capped at an adjacent diagonal's lean so ranged attackers don't dash.
+          const f = Math.min(0.32, 0.45 / Math.max(1e-6, Math.hypot(to.x - from.x, to.y - from.y)));
+          stage.strikePose?.(e.attackerId, e.name, to, 90 * k);
+          await stage.lungeToken(e.attackerId, { x: from.x + (to.x - from.x) * f, y: from.y + (to.y - from.y) * f }, 90 * k);
         }
         break;
       }
@@ -136,6 +147,8 @@ export async function choreograph(stage: Stage, events: GameEvent[], before: Bat
       }
       case 'effectResolve': {
         const big = e.tiles.length > 12;
+        const source = view.effects.find((f) => f.id === e.effectId)?.sourceId;
+        if (source) stage.effectLands?.(source, e.name, 520 * k);
         stage.shake(big ? 380 : 220, big ? 0.014 : 0.006);
         for (const h of e.hits) {
           const t = find(h.unitId);

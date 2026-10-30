@@ -9,6 +9,7 @@ A browser sandbox for Aaron to play and tune AP-timeline tactics before a full e
 - **Two carried slots**, paid swapping, per-instance reload/cooldown state, and basic + proficiency skills. The proficiency and special-family unlock switches are sandbox conveniences, not a skill tree. Granary keeps four starter melee families and clothing; later encounters admit the wider catalog subject to unlocks.
 - **Crossbow reload policies:** flexible permits other actions before paying the reload; strict enforces the next combat action as reload. Firing and reloading remain separate paid actions.
 - **Shared previews:** movement/path engagement risks, attack/skill damage and reactions, reload/swap costs, next-turn ghosts and delayed-effect escape outlook use the same rules as execution. They are current-board estimates, not promises about future AI moves or random outcomes. Delayed skills default to no reactions but can explicitly author exceptions.
+- **Learning telegraphs:** the first player turn with a telegraph on the board shows a short three-step lesson (tiles → when it lands → your next-turn marker), docked above Incoming; it never blocks the board, is remembered per browser, and Help can replay it. At impact, party members who stepped out get **ESCAPED**, and anyone caught gets the reason on the board and in the log: their turn came too late, no clear tile was in reach, they were held, or they stayed in.
 - **Rules tuning:** grouped controls cover timeline, movement, engagement, flanking, reactions, damage, boss behavior, Weapons, **Weapon tuning** and **Enemy tuning**. Badges distinguish *Aaron's rule*, *Tentative math* and *Demo default*, with rationale. Weapon/skill/unit/armor data separates sourced concepts from tentative/demo numbers. Not every design question is an exposed control; changing fight rules restarts the fight.
 - **Feedback:** result reports include telemetry, config changes and a setup link. Share links reproduce **encounter, two-slot loadout, seed and rules — not an action replay**. The same seed only reproduces a fight when the action sequence also matches. Human play and expert/novice bot policies are distinct balance samples.
 - **2D or 3D board:** the top-bar **2D / 3D** toggle switches between the Phaser board and a three.js board (remembered per browser, not part of share links). Both draw the same overlays, labels and event choreography; 3D adds orbit (drag) and zoom (wheel). A drag never commits; click in place to act.
@@ -23,6 +24,8 @@ npm run check                     # typecheck + lint + unit/property tests
 npm run test:e2e                   # Playwright builds and serves on :4173
 E2E_PORT=4187 npx playwright test  # use another port for parallel worktrees
 ```
+
+**Hosted build:** https://bmanturner.github.io/soc-combat-demo/. Every push to `main` runs `npm run check` and `npm run build`, then publishes `dist/` to GitHub Pages (`.github/workflows/pages.yml`). Share links from the hosted build work as-is, because all state is in the URL hash.
 
 ## Simulations and diagnostics
 
@@ -46,7 +49,7 @@ Encounter IDs are `granary`, `wolves`, `cultists`, `nephilim`. `trials` is seeds
 | `src/content/` | Typed gear, skills, unit templates, provenance and encounter data. |
 | `src/game/` | Shared Zustand store, controller/AI pacing, share links and preview helpers. |
 | `src/board/` | Renderer-neutral `view-model.ts` (what overlays/labels to show) and `choreography.ts` (how events animate), plus the Phaser 2D scene. |
-| `src/board3d/` | three.js 3D board: same view model and choreography, DOM annotation lane and floats, lazy-loaded on first use. |
+| `src/board3d/` | three.js 3D board: same view model and choreography, DOM annotation lane and floats, lazy-loaded on first use. Units are procedural low-poly figures posed in code (`rig.ts`, `figures.ts`, `giant.ts`, `projectiles.ts`; no asset files); a template without a figure falls back to a pawn. |
 | `src/hud/` | React timeline, actions, threats, log, settings and screens. |
 | `tools/`, `e2e/` | Sim/trace/balance/report/screenshot utilities and Playwright specs. |
 | `notes/rules/` | Earlier shared-rules corrections and their regression evidence. |
@@ -63,7 +66,7 @@ Phase notes record the revision/experiment they tested, not an evergreen guarant
 | Choice | Why |
 |---|---|
 | **Phaser 4** (board) | A full 2D framework supplies tweens, input, cameras, scaling and WebGL. PixiJS alone would require rebuilding those pieces; Godot's web export is heavier for a quick shared link; boardgame.io solves multiplayer we do not need. |
-| **three.js** (3D board) | Optional alternate renderer for spatial readability. It implements the same `Stage` primitives as Phaser, so previews and animations cannot drift between views; it loads as a separate chunk only when 3D is selected. |
+| **three.js** (3D board) | Optional alternate renderer for spatial readability. It implements the same `Stage` primitives as Phaser, so previews and animations cannot drift between views, plus two optional pose hooks (`strikePose`, `effectLands`) that drive its figures; it loads as a separate chunk only when 3D is selected. |
 | **React 19 + Zustand** (HUD) | Dense forms, settings, timelines and tables suit the DOM. A vanilla Zustand store is shared by Phaser and React without either owning it. |
 | **Pure TypeScript rules core** | Seeded mulberry32, serializable state and browser-free tests. A future engine port can use the golden tests as an executable spec. |
 | **Vite 8, Vitest 5, fast-check, Playwright** | Fast dev/build, unit/property tests and real-browser e2e. TypeScript 6 is the project's supported compiler/tooling baseline. |

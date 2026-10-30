@@ -12,6 +12,8 @@ import { choreograph, type Ease, type Stage } from '../board/choreography';
 import { COLORS } from '../board/palette';
 import { boardView, unitCenter, type FillLayer, type LineLayer, type Pt } from '../board/view-model';
 import { GroundShape, PAWN_HEIGHT, PX, applyOpacity, makeToken, overlayMaterial, paintToken, type Token3D } from './meshes';
+import { makeProjectile } from './projectiles';
+import type { Projectile } from './rig';
 import { EASE, TweenClock, yoyo } from './tweens';
 
 /** Reserved annotation lane above the board, as on the 2D board. */
@@ -423,6 +425,13 @@ export class ThreeBoard implements Animator, Stage {
         tok.flash = 1;
         tok.badge = tv.badge;
         paintToken(tok, tv.unit, tv.active, tv.hovered);
+        if (tok.figure) {
+          tok.figure.settle();
+          tok.figure.pending(s.battle.effects.filter((f) => f.sourceId === tv.unit.id).map((f) => f.name));
+          const foe = tv.unit.ko ? null : nearestFoe(tv.unit, s.battle.units);
+          const yaw = foe ? yawToward(tok.root.position, this.world(unitCenter(foe))) : null;
+          if (yaw !== null) tok.figure.face(yaw);
+        }
       }
     }
 
@@ -518,6 +527,8 @@ export class ThreeBoard implements Animator, Stage {
       // The pawn plate's painted content (medallion, HP bar) spans about 55% of the sprite width.
       const hw = (t.plate.scale.x * k * (t.big ? 1 : 0.55)) / 2;
       const hh = (t.plate.scale.y * k) / 2;
+      // The sprite draws around its anchor (`center`); shift to the drawn centre.
+      c.addScaledVector(up, (0.5 - t.plate.center.y) * 2 * hh);
       const cs = this.screen(c);
       const cr = this.screen(c.clone().addScaledVector(right, hw));
       const cu = this.screen(c.clone().addScaledVector(up, hh));
@@ -686,6 +697,7 @@ export class ThreeBoard implements Animator, Stage {
     this.last = now;
     this.elapsed += dt;
     this.clock.tick(dt);
+    for (const t of this.tokens.values()) t.figure?.update(dt);
 
     // Telegraph pulse: 1 → 0.55 → 1 every 1.4 s, as on the 2D board.
     const pulse = 0.775 + 0.225 * Math.cos((this.elapsed / 700) * Math.PI);
@@ -761,10 +773,11 @@ export class ThreeBoard implements Animator, Stage {
     node.style.fontSize = `${Math.round(56 * (big ? 0.42 : 0.3))}px`;
     node.style.fontFamily = UI_FONT;
     this.floatLayer.append(node);
-    // Rise from above the figure: pawns are short, the boss block is tall.
+    // Rise from above the unit under the text: pawns are short, figures taller, the boss block tallest.
     const ground = this.world(at);
-    const overBoss = [...this.tokens.values()].some((t) => t.big && t.root.position.distanceTo(ground) < 1.2);
-    const f: FloatText = { el: node, at: ground.setY(overBoss ? 2 : PAWN_HEIGHT + 0.2), rise: 0 };
+    let top = PAWN_HEIGHT;
+    for (const t of this.tokens.values()) if (t.root.position.distanceTo(ground) < (t.big ? 1.2 : 0.6)) top = Math.max(top, t.top);
+    const f: FloatText = { el: node, at: ground.setY(top + 0.2), rise: 0 };
     this.floats.add(f);
     this.clock.run(
       1100,
@@ -786,6 +799,13 @@ export class ThreeBoard implements Animator, Stage {
     const from = tok.root.position.clone();
     const dest = this.world(to);
     const fn = EASE[ease];
+    if (tok.figure) {
+      // Sine moves are walking steps; the other eases are shoves, hooks and sidesteps, taken without turning.
+      const yaw = ease === 'sine' ? yawToward(from, dest) : null;
+      if (yaw !== null) tok.figure.face(yaw);
+      if (ease === 'sine') tok.figure.walk(ms);
+      else tok.figure.stagger(ms);
+    }
     await this.tween(ms, (p) => {
       tok.root.position.lerpVectors(from, dest, fn(p));
       // Small hop per step so walking reads as movement, not sliding.
@@ -801,6 +821,61 @@ export class ThreeBoard implements Animator, Stage {
     await this.tween(ms * 2, (p) => tok.root.position.lerpVectors(from, dest, EASE.quad(yoyo(p, 2))));
   }
 
+  strikePose(id: string, attack: string, target: Pt, ms: number): void {
+    const tok = this.tokens.get(id);
+    if (!tok?.figure) return;
+    const from = tok.root.position.clone();
+    // The unit on the named tile; a multi-tile target is faced and aimed at its nearest tile.
+    const tile = { x: Math.floor(target.x), y: Math.floor(target.y) };
+    const victim = this.battle()?.units.find((u) => !u.ko && u.footprint.some((f) => u.pos.x + f.x === tile.x && u.pos.y + f.y === tile.y));
+    const aims = victim && victim.footprint.length > 1 ? victim.footprint.map((f) => this.world({ x: victim.pos.x + f.x + 0.5, y: victim.pos.y + f.y + 0.5 })) : [this.world(target)];
+    const dest = aims.reduce((best, p) => (p.distanceTo(from) < best.distanceTo(from) ? p : best));
+    const yaw = yawToward(from, dest);
+    if (yaw !== null) tok.figure.face(yaw);
+    const projectile = tok.figure.strike(Math.hypot(dest.x - from.x, dest.z - from.z), attack, ms);
+    if (!projectile) return;
+    // Released at the lunge peak, arriving as the lunge returns and the strike result shows.
+    from.y += tok.top * 0.75;
+    const struck = victim ? this.tokens.get(victim.id) : undefined;
+    dest.y += struck ? Math.min(struck.top * 0.6, 1.2) : 0.25;
+    this.fly(projectile, from, dest, ms, ms);
+  }
+
+  effectLands(sourceId: string, effect: string, ms: number): void {
+    this.tokens.get(sourceId)?.figure?.land(effect, ms);
+  }
+
+  /** Fire-and-forget projectile flight from `from` to `to` after `delay`; cancel() disposes it mid-flight. */
+  private fly(kind: Projectile, from: THREE.Vector3, to: THREE.Vector3, delay: number, ms: number): void {
+    const { object, lift, spin } = makeProjectile(kind);
+    object.visible = false;
+    this.fxGroup.add(object);
+    this.animationObjects.add(object);
+    const arc = lift * from.distanceTo(to);
+    const at = (p: number, out: THREE.Vector3) => out.lerpVectors(from, to, p).setY(from.y + (to.y - from.y) * p + arc * 4 * p * (1 - p));
+    const ahead = new THREE.Vector3();
+    const forward = new THREE.Vector3(0, 0, 1);
+    this.wait(delay)
+      .then(() =>
+        this.tween(ms, (p) => {
+          object.visible = true;
+          at(p, object.position);
+          at(Math.min(1, p + 0.02), ahead);
+          if (p < 0.98) object.quaternion.setFromUnitVectors(forward, ahead.sub(object.position).normalize());
+          if (spin) object.rotateX(spin * p);
+        }),
+      )
+      .then(
+        () => {
+          this.animationObjects.delete(object);
+          this.fxGroup.remove(object);
+          disposeTree(object);
+        },
+        // Cancelled: cancel() already disposed it with the other animation objects.
+        () => {},
+      );
+  }
+
   async pulseToken(id: string, scale: number, ms: number): Promise<void> {
     const tok = this.tokens.get(id);
     if (tok) await this.tween(ms * 2, (p) => tok.root.scale.setScalar(1 + (scale - 1) * yoyo(p, 2)));
@@ -809,6 +884,7 @@ export class ThreeBoard implements Animator, Stage {
   async blinkToken(id: string, ms: number): Promise<void> {
     const tok = this.tokens.get(id);
     if (!tok) return;
+    tok.figure?.hit(ms * 4);
     await this.tween(ms * 4, (p) => {
       tok.flash = p >= 1 ? 1 : 0.35 + 0.65 * yoyo(p, 4);
       applyOpacity(tok);
@@ -819,6 +895,7 @@ export class ThreeBoard implements Animator, Stage {
     const tok = this.tokens.get(id);
     if (!tok) return;
     const from = tok.alpha;
+    if (alpha < from) tok.figure?.fall(ms);
     await this.tween(ms, (p) => {
       tok.alpha = from + (alpha - from) * p;
       applyOpacity(tok);
@@ -868,6 +945,30 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string): H
   const node = document.createElement(tag);
   node.className = className;
   return node;
+}
+
+/** Figure yaw (0 = facing +z) from one world point toward another; null when they coincide. */
+function yawToward(from: THREE.Vector3, to: THREE.Vector3): number | null {
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  return dx * dx + dz * dz < 1e-6 ? null : Math.atan2(dx, dz);
+}
+
+/** Closest living opponent, which an idle figure faces. */
+function nearestFoe(u: UnitState, units: readonly UnitState[]): UnitState | null {
+  const c = unitCenter(u);
+  let best: UnitState | null = null;
+  let bestD = Infinity;
+  for (const o of units) {
+    if (o.side === u.side || o.ko) continue;
+    const p = unitCenter(o);
+    const d = Math.hypot(p.x - c.x, p.y - c.y);
+    if (d < bestD) {
+      best = o;
+      bestD = d;
+    }
+  }
+  return best;
 }
 
 /** Dispose every geometry, material and texture under `root` and detach its children. */
