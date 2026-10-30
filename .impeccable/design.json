@@ -1,0 +1,454 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-30T02:22:11.822Z",
+  "title": "Design System: Sons of Cain — Combat Demo",
+  "extensions": {
+    "colorMeta": {
+      "soot-black": {
+        "role": "neutral",
+        "displayName": "Soot Black",
+        "canonical": "oklch(18.0% 0.008 67.3)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#282421",
+          "#45413e",
+          "#64605d",
+          "#86817d",
+          "#a8a4a0",
+          "#cdc8c4",
+          "#f2eee9"
+        ]
+      },
+      "smithy-brown": {
+        "role": "neutral",
+        "displayName": "Smithy Brown",
+        "canonical": "oklch(21.3% 0.012 67.1)",
+        "tonalRamp": [
+          "#0f0a06",
+          "#29241f",
+          "#47413b",
+          "#66605a",
+          "#88817b",
+          "#aaa49d",
+          "#cfc8c1",
+          "#f4ede6"
+        ]
+      },
+      "hearth-brown": {
+        "role": "neutral",
+        "displayName": "Hearth Brown",
+        "canonical": "oklch(24.7% 0.015 76.2)",
+        "tonalRamp": [
+          "#0f0a05",
+          "#29241d",
+          "#474139",
+          "#666058",
+          "#888179",
+          "#aaa49b",
+          "#cfc8bf",
+          "#f4ede4"
+        ]
+      },
+      "ash-line": {
+        "role": "neutral",
+        "displayName": "Ash Line",
+        "canonical": "oklch(32.1% 0.022 66.9)",
+        "tonalRamp": [
+          "#110903",
+          "#2d2319",
+          "#4a4036",
+          "#6a5f54",
+          "#8c8074",
+          "#afa397",
+          "#d3c7ba",
+          "#f9ecdf"
+        ]
+      },
+      "parchment": {
+        "role": "neutral",
+        "displayName": "Parchment",
+        "canonical": "oklch(91.6% 0.028 83.5)",
+        "tonalRamp": [
+          "#110a01",
+          "#2b2415",
+          "#494131",
+          "#696050",
+          "#8a8170",
+          "#ada492",
+          "#d2c8b5",
+          "#f7edda"
+        ]
+      },
+      "faded-ink": {
+        "role": "neutral",
+        "displayName": "Faded Ink",
+        "canonical": "oklch(67.2% 0.029 78.1)",
+        "tonalRamp": [
+          "#120900",
+          "#2d2314",
+          "#4b4030",
+          "#6b5f4f",
+          "#8c816f",
+          "#afa391",
+          "#d4c7b4",
+          "#faedd9"
+        ]
+      },
+      "cast-bronze": {
+        "role": "secondary",
+        "displayName": "Cast Bronze",
+        "canonical": "oklch(60.5% 0.085 74.2)",
+        "tonalRamp": [
+          "#130900",
+          "#352001",
+          "#5a3b02",
+          "#7e5923",
+          "#a17b46",
+          "#c59d68",
+          "#eac18b",
+          "#ffebd3"
+        ]
+      },
+      "forge-gold": {
+        "role": "primary",
+        "displayName": "Forge Gold",
+        "canonical": "oklch(83.4% 0.141 85.4)",
+        "tonalRamp": [
+          "#110a00",
+          "#312301",
+          "#543e01",
+          "#7b5c00",
+          "#a37b06",
+          "#cd9d1d",
+          "#f3c24f",
+          "#ffedc7"
+        ]
+      },
+      "forge-ember": {
+        "role": "primary",
+        "displayName": "Forge Ember",
+        "canonical": "oklch(43.7% 0.074 70.8)",
+        "tonalRamp": [
+          "#140800",
+          "#362001",
+          "#5a3a0c",
+          "#7c5a2f",
+          "#9f7b50",
+          "#c39e72",
+          "#e8c295",
+          "#feebd5"
+        ]
+      },
+      "kin-teal": {
+        "role": "tertiary",
+        "displayName": "Kin Teal",
+        "canonical": "oklch(75.6% 0.100 191.1)",
+        "tonalRamp": [
+          "#000f0e",
+          "#022c2a",
+          "#034d4a",
+          "#04706d",
+          "#189591",
+          "#4bb9b4",
+          "#73ded9",
+          "#b6fffa"
+        ]
+      },
+      "foe-crimson": {
+        "role": "tertiary",
+        "displayName": "Foe Crimson",
+        "canonical": "oklch(60.8% 0.159 33.0)",
+        "tonalRamp": [
+          "#1d0100",
+          "#490900",
+          "#7b1601",
+          "#a8321b",
+          "#d0573f",
+          "#f87b61",
+          "#feb4a3",
+          "#ffe9e4"
+        ]
+      },
+      "telegraph-red": {
+        "role": "tertiary",
+        "displayName": "Telegraph Red",
+        "canonical": "oklch(62.8% 0.180 30.8)",
+        "tonalRamp": [
+          "#1e0000",
+          "#4c0400",
+          "#7e0b01",
+          "#b02311",
+          "#d94c39",
+          "#ff745f",
+          "#feb4a6",
+          "#fee9e5"
+        ]
+      },
+      "warning-amber": {
+        "role": "tertiary",
+        "displayName": "Warning Amber",
+        "canonical": "oklch(81.1% 0.151 69.9)",
+        "tonalRamp": [
+          "#140800",
+          "#361f00",
+          "#5d3901",
+          "#875504",
+          "#b37201",
+          "#e09117",
+          "#ffba65",
+          "#ffebd6"
+        ]
+      },
+      "path-blue": {
+        "role": "tertiary",
+        "displayName": "Path Blue",
+        "canonical": "oklch(70.5% 0.158 252.8)",
+        "tonalRamp": [
+          "#000b1e",
+          "#00254a",
+          "#00427d",
+          "#0261b3",
+          "#2e84dd",
+          "#5ba8ff",
+          "#a3cdfe",
+          "#e3f0ff"
+        ]
+      },
+      "ready-green": {
+        "role": "tertiary",
+        "displayName": "Ready Green",
+        "canonical": "oklch(75.5% 0.122 145.5)",
+        "tonalRamp": [
+          "#001001",
+          "#002f07",
+          "#025114",
+          "#2a7332",
+          "#4d9553",
+          "#71b975",
+          "#95df98",
+          "#caffcb"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Menu title \"Combat Demo\" only."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Encounter names on cards and setup; result headline at 34px."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Topbar encounter name, turn header (Forge Gold), weapon and unit names."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default UI text and controls."
+      },
+      "body-small": {
+        "displayName": "Body small",
+        "purpose": "Stats, hints, captions, provenance lines."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Bronze uppercase section titles."
+      },
+      "eyebrow": {
+        "displayName": "Eyebrow",
+        "purpose": "\"SONS OF CAIN\" kicker above the display title."
+      },
+      "log": {
+        "displayName": "Log",
+        "purpose": "Combat log only, colored by line tone."
+      }
+    },
+    "shadows": [
+      {
+        "name": "modal-scrim",
+        "value": "rgba(8,6,4,0.72)",
+        "purpose": "Backdrop behind result and help dialogs."
+      },
+      {
+        "name": "drawer-scrim",
+        "value": "rgba(0,0,0,0.5)",
+        "purpose": "Backdrop behind the rules drawer."
+      },
+      {
+        "name": "board-text-stroke",
+        "value": "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 3px #000",
+        "purpose": "Legibility stroke for board labels and floating combat text; never on HUD text."
+      }
+    ],
+    "motion": [
+      {
+        "name": "timeline-slide",
+        "value": "left 0.35s ease, top 0.2s ease",
+        "purpose": "Timeline items moving as the clock advances."
+      },
+      {
+        "name": "ghost-follow",
+        "value": "left 0.12s ease",
+        "purpose": "Next-turn ghost tracking the hovered action."
+      },
+      {
+        "name": "telegraph-pulse",
+        "value": "opacity 1 → 0.55, 700ms sine, yoyo, infinite",
+        "purpose": "Pulsing telegraphed tiles on both boards."
+      },
+      {
+        "name": "float-rise",
+        "value": "1100ms cubic-out, rise 0.7 tile, fade to 0",
+        "purpose": "Floating combat text."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "1100px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Default ledger control: tonal fill, hairline, bronze border on hover.",
+      "html": "<button class=\"ds-btn\">Throwing Knife · 75 AP <kbd class=\"ds-kbd\">1</kbd></button>",
+      "css": ".ds-btn { font: 13px/1.45 var(--sans, Inter, 'Segoe UI', system-ui, sans-serif); color: var(--text, #ece2cf); background: var(--panel-2, #252019); border: 1px solid var(--line, #3b3127); border-radius: 6px; padding: 6px 10px; cursor: pointer; } .ds-btn:hover { border-color: var(--bronze, #a07a45); } .ds-btn:focus-visible { outline: 2px solid var(--gold, #f2c14e); outline-offset: 2px; } .ds-kbd { font: 11px var(--sans, Inter, 'Segoe UI', system-ui, sans-serif); opacity: .6; margin-left: 4px; border: 1px solid var(--line, #3b3127); border-radius: 3px; padding: 0 3px; }"
+    },
+    {
+      "name": "Selected Button",
+      "kind": "button",
+      "refersTo": "button-selected",
+      "description": "The live choice: Gilded Shadow fill with a Forge Gold border.",
+      "html": "<button class=\"ds-btn-on\">Move <kbd class=\"ds-kbd\">M</kbd></button>",
+      "css": ".ds-btn-on { font: 13px/1.45 var(--sans, Inter, 'Segoe UI', system-ui, sans-serif); color: var(--text, #ece2cf); background: var(--panel-2, #252019); border: 1px solid var(--line, #3b3127); border-radius: 6px; padding: 6px 10px; cursor: pointer; background: #3a2f1b; border-color: var(--gold, #f2c14e); } .ds-btn-on:focus-visible { outline: 2px solid var(--gold, #f2c14e); outline-offset: 2px; } .ds-kbd { font: 11px var(--sans, Inter, 'Segoe UI', system-ui, sans-serif); opacity: .6; margin-left: 4px; border: 1px solid var(--line, #3b3127); border-radius: 3px; padding: 0 3px; }"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The next action to take: Forge Ember fill, Forge Gold border.",
+      "html": "<button class=\"ds-btn-primary\">Fight</button>",
+      "css": ".ds-btn-primary { font: 13px/1.45 var(--sans, Inter, 'Segoe UI', system-ui, sans-serif); color: var(--text, #ece2cf); background: var(--panel-2, #252019); border: 1px solid var(--line, #3b3127); border-radius: 6px; padding: 6px 10px; cursor: pointer; background: #6b4a1f; border-color: var(--gold, #f2c14e); font-weight: 600; font-size: 16px; padding: 10px 28px; } .ds-btn-primary:hover { border-color: var(--gold, #f2c14e); filter: brightness(1.08); } .ds-btn-primary:focus-visible { outline: 2px solid var(--gold, #f2c14e); outline-offset: 2px; }"
+    },
+    {
+      "name": "Board View Segment",
+      "kind": "nav",
+      "refersTo": "button-selected",
+      "description": "Joined 2D/3D toggle in the topbar; selected half uses the on state.",
+      "html": "<div class=\"ds-seg\" role=\"group\" aria-label=\"Board view\"><button class=\"ds-seg-b\" aria-pressed=\"false\">2D</button><button class=\"ds-seg-b ds-on\" aria-pressed=\"true\">3D</button></div>",
+      "css": ".ds-seg { display: inline-flex; } .ds-seg-b { font: 600 12px var(--sans, Inter, 'Segoe UI', system-ui, sans-serif); color: var(--text, #ece2cf); background: var(--panel-2, #252019); border: 1px solid var(--line, #3b3127); padding: 4px 9px; cursor: pointer; } .ds-seg-b:first-child { border-radius: 6px 0 0 6px; } .ds-seg-b:last-child { border-radius: 0 6px 6px 0; border-left: none; } .ds-seg-b:hover { border-color: var(--bronze, #a07a45); } .ds-seg-b.ds-on { background: #3a2f1b; border-color: var(--gold, #f2c14e); } .ds-seg-b:focus-visible { outline: 2px solid var(--gold, #f2c14e); outline-offset: 2px; }"
+    },
+    {
+      "name": "Section Label",
+      "kind": "custom",
+      "refersTo": "label",
+      "description": "Whispered bronze uppercase label that locates a panel section.",
+      "html": "<div class=\"ds-label\">Combat log</div>",
+      "css": ".ds-label { font: 600 11px var(--sans, Inter, 'Segoe UI', system-ui, sans-serif); text-transform: uppercase; letter-spacing: .12em; color: var(--bronze, #a07a45); }"
+    },
+    {
+      "name": "Unit Card",
+      "kind": "card",
+      "refersTo": "unit-card",
+      "description": "Ledger entry for a combatant; side-colored left edge, serif name, sans stats.",
+      "html": "<div class=\"ds-unit\"><div class=\"ds-unit-head\"><span class=\"ds-glyph\">J</span><div><div class=\"ds-unit-name\">Jubal</div><div class=\"ds-unit-role\">Musician of the Cainites</div></div></div><div class=\"ds-hp\"><div class=\"ds-hp-bar\" style=\"width:72%\"></div><span>97 / 135 HP</span></div><div class=\"ds-stats\"><span>Armor 25</span><span>Dodge 20%</span><span>10 AP/tile</span></div></div>",
+      "css": ".ds-unit { width: 260px; font: 12px/1.45 var(--sans, Inter, 'Segoe UI', system-ui, sans-serif); color: var(--text, #ece2cf); background: #211b15; border: 1px solid var(--line, #3b3127); border-left: 3px solid var(--party, #57c4bf); border-radius: 6px; padding: 8px; } .ds-unit-head { display: flex; gap: 8px; align-items: center; } .ds-glyph { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font: 700 13px var(--serif, Georgia, 'Times New Roman', serif); background: #1f3d3c; border: 2px solid var(--party, #57c4bf); } .ds-unit-name { font: 15px var(--serif, Georgia, 'Times New Roman', serif); } .ds-unit-role { color: var(--muted, #a09482); font-size: 11px; } .ds-hp { position: relative; height: 16px; background: #0f0c0a; border-radius: 4px; margin: 6px 0; overflow: hidden; } .ds-hp-bar { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #4b8f4e, #6fbf73); } .ds-hp span { position: relative; font-size: 11px; padding-left: 6px; } .ds-stats { display: flex; flex-wrap: wrap; gap: 4px 10px; color: #cfc4b0; }"
+    },
+    {
+      "name": "Encounter Card",
+      "kind": "card",
+      "refersTo": "encounter-card",
+      "description": "Menu entry for a fight; serif name, faded meta, gold call to action.",
+      "html": "<button class=\"ds-enc\"><span class=\"ds-enc-num\">4</span><span class=\"ds-enc-name\">The Trapped Nephilim</span><span class=\"ds-enc-sub\">Boss · Jubal + Jabal + Hired Archer · Level 5</span><span class=\"ds-enc-meta\">Danger: High: ignoring a telegraph kills</span><span class=\"ds-enc-play\">Choose loadout →</span></button>",
+      "css": ".ds-enc { width: 240px; text-align: left; font: 13px/1.45 var(--sans, Inter, 'Segoe UI', system-ui, sans-serif); color: var(--text, #ece2cf); padding: 16px; background: linear-gradient(180deg, #241d16, #1a1511); border: 1px solid var(--line, #3b3127); border-radius: 10px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; } .ds-enc:hover { border-color: var(--gold, #f2c14e); transform: translateY(-1px); } .ds-enc:focus-visible { outline: 2px solid var(--gold, #f2c14e); outline-offset: 2px; } .ds-enc-num { font: 600 12px var(--sans, Inter, 'Segoe UI', system-ui, sans-serif); color: var(--bronze, #a07a45); } .ds-enc-name { font: 22px var(--serif, Georgia, 'Times New Roman', serif); } .ds-enc-sub { color: var(--muted, #a09482); font-size: 12px; } .ds-enc-meta { font-size: 12px; color: #c2b59f; border-top: 1px solid var(--line, #3b3127); padding-top: 6px; } .ds-enc-play { font: 600 12px var(--sans, Inter, 'Segoe UI', system-ui, sans-serif); color: var(--gold, #f2c14e); }"
+    },
+    {
+      "name": "AP Timeline",
+      "kind": "custom",
+      "refersTo": "timeline-unit-pill",
+      "description": "Signature track: unit pills, effect diamond, dashed next-turn ghost.",
+      "html": "<div class=\"ds-tl\"><i class=\"ds-tick\" style=\"left:25%\"></i><i class=\"ds-tick ds-major\" style=\"left:50%\"></i><i class=\"ds-tick\" style=\"left:75%\"></i><span class=\"ds-pill ds-party ds-active\" style=\"left:6%\">J</span><span class=\"ds-pill ds-enemy\" style=\"left:30%\">W</span><span class=\"ds-fx\" style=\"left:46%\"></span><span class=\"ds-ghost\" style=\"left:58%\">J</span></div>",
+      "css": ".ds-tl { position: relative; width: 420px; height: 64px; background: linear-gradient(90deg, #2a2219, #1f1913); border: 1px solid var(--line, #3b3127); border-radius: 8px; } .ds-tick { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.05); } .ds-major { background: rgba(255,255,255,.12); } .ds-pill { position: absolute; top: 10px; transform: translateX(-50%); width: 26px; height: 20px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font: 700 11px var(--serif, Georgia, 'Times New Roman', serif); color: var(--text, #ece2cf); border: 2px solid; } .ds-party { background: #1f3d3c; border-color: var(--party, #57c4bf); } .ds-enemy { background: #3f1e18; border-color: var(--enemy, #d0573f); } .ds-active { box-shadow: 0 0 0 2px var(--gold, #f2c14e); } .ds-fx { position: absolute; top: 12px; width: 16px; height: 16px; transform: translateX(-50%) rotate(45deg); background: #5a1410; border: 2px solid var(--danger, #e0533f); border-radius: 3px; } .ds-ghost { position: absolute; top: 4px; bottom: 4px; width: 26px; transform: translateX(-50%); border: 2px dashed var(--amber, #ffae42); color: var(--amber, #ffae42); border-radius: 8px; display: flex; align-items: flex-end; justify-content: center; font: 700 10px var(--serif, Georgia, 'Times New Roman', serif); background: rgba(255,174,66,.1); }"
+    },
+    {
+      "name": "Provenance Badges",
+      "kind": "chip",
+      "refersTo": "provenance-badge",
+      "description": "Source tier on every tunable value: Aaron's rule, tentative math, demo default.",
+      "html": "<span class=\"ds-badge ds-src\">Aaron's rule</span> <span class=\"ds-badge ds-tent\">Tentative math</span> <span class=\"ds-badge ds-demo\">Demo default</span>",
+      "css": ".ds-badge { font: 10px var(--sans, Inter, 'Segoe UI', system-ui, sans-serif); padding: 1px 6px; border-radius: 10px; border: 1px solid; white-space: nowrap; } .ds-src { color: var(--ok, #7bc47f); border-color: var(--ok, #7bc47f); } .ds-tent { color: var(--amber, #ffae42); border-color: var(--amber, #ffae42); } .ds-demo { color: #9fb6ff; border-color: #9fb6ff; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Forge Ledger",
+    "overview": "Tubal-Cain's workshop crossed with a designer's record book. The ground is soot. Light comes only from metal and fire: cast bronze for structure, forge gold for whatever is live right now. On that ground every number is weighed, labeled and recorded. The system is ancient and mythic, never modern-fantasy or sci-fi. It is lamplit and warm-dark, never cold or neon. It carries weight: actions have consequences, so nothing bounces, sparkles or celebrates for its own sake.\n\nThe HUD is quiet and exact. Surfaces sit flat in warm tonal steps, separated by single hairlines, so the game layer — teal kin, crimson foes, red telegraphs, amber risk, blue paths — is the only saturated color on screen and always reads first. Typography is split by meaning: names of things (encounters, people, weapons, the turn header) are set in an old-style serif; numbers, rules and controls are set in a plain sans. The result is dense but calm: a three-column battle layout where the board leads and the ledger panels flank it.",
+    "keyCharacteristics": [
+      "Warm soot neutrals (hue ≈ 67–83° in OKLCH); no cool grays anywhere.",
+      "Two metal accents with fixed jobs: bronze structures, gold marks the live choice.",
+      "A semantic game palette that is never borrowed for decoration.",
+      "Serif for names, sans for numbers and controls, mono only for the combat log.",
+      "Flat tonal layering with 1px hairlines; shadows belong to game pieces and modal scrims only.",
+      "Dense desktop layout; board in the center, ledger panels at its sides."
+    ],
+    "rules": [
+      {
+        "name": "The Forge Gold Rule",
+        "body": "Gold marks the single live thing — the active unit, the current selection, the next action to take. If two unrelated things on a screen are gold, one of them is wrong.",
+        "section": "colors"
+      },
+      {
+        "name": "The Semantic Hue Rule",
+        "body": "Teal is kin, crimson is foe, red is incoming harm, amber is risk or aim, blue is movement, green is ready or safe. These hues never decorate, brand or separate sections; a player must be able to trust color alone.",
+        "section": "colors"
+      },
+      {
+        "name": "The Warm Dark Rule",
+        "body": "Every neutral is warm. No cool grays, no pure black panels, no neon. Text shadows on the board may use pure black only as a legibility stroke.",
+        "section": "colors"
+      },
+      {
+        "name": "The Names Are Serif Rule",
+        "body": "Serif is reserved for names of things: encounters, people, weapons, the turn header, dialog titles. Numbers, rules, stats and controls are always sans. Serif headings stay at weight 400.",
+        "section": "typography"
+      },
+      {
+        "name": "The Whispered Label Rule",
+        "body": "Section labels are small, uppercase, tracked and bronze. They locate; they never compete with content.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Ledger Rule",
+        "body": "Ledger surfaces never lift. If something needs emphasis, it changes border to Forge Gold or fill to Gilded Shadow; it does not gain a shadow or glow.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Circle Is a Unit Rule",
+        "body": "Circles mean a combatant, diamonds mean a pending effect, dashed outlines mean a projection. Do not use these shapes decoratively.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** reserve Forge Gold (#f2c14e) for the single live element: active turn, current selection, next action.",
+      "**Do** separate surfaces with one Ash Line (#3b3127) hairline and a tonal step, never a shadow.",
+      "**Do** set names of encounters, people and weapons in Georgia at weight 400, and every number in the sans.",
+      "**Do** use the game palette strictly by meaning: teal kin, crimson foe, red incoming harm, amber risk/aim, blue movement, green ready.",
+      "**Do** attach a provenance badge to any new tunable rule, stat or number.",
+      "**Do** keep board annotations in the reserved lane above the board with a leader line to the tile, in both 2D and 3D.",
+      "**Do** keep motion short and functional (timeline slides 0.35s, ghost moves 0.12s); let weight come from stillness."
+    ],
+    "donts": [
+      "**Don't** introduce cool grays, neon, or saturated color outside the semantic game palette.",
+      "**Don't** add drop shadows, glows or lifted cards to HUD panels.",
+      "**Don't** use teal, crimson, red, amber or blue as decoration, section color or branding.",
+      "**Don't** bold the serif or set numbers and controls in it.",
+      "**Don't** add playful bounce, confetti or celebratory motion; victory and defeat are stated, not performed.",
+      "**Don't** reuse circles, diamonds or dashed outlines for non-game UI; they mean unit, effect and projection.",
+      "**Don't** reach for modern-fantasy or sci-fi ornament; the register is Bronze Age and scriptural."
+    ]
+  }
+}
