@@ -25,7 +25,7 @@ function bossTurn(config = {}) {
 describe('engine and preview parity', () => {
   it('R-01: minimum delay zero must not starve every other unit/effect', () => {
     let s = duel();
-    s.config.minTurnDelay = 0;
+    s.config.noActionTurnAp = 0;
     for (let n = 0; n < 20; n++) s = applyAction(s, { type: 'endTurn', unitId: s.active!.unitId }).state;
     expect(s.clock).toBeGreaterThan(0);
   });
@@ -154,10 +154,10 @@ describe('invariant/property controls', () => {
     expect(resolve?.t === 'effectResolve' && resolve.hits.map(h => h.unitId)).toEqual(['nephilim']);
   });
   it('sanitizer drops unknown, prototype keys, invalid types and nonfinite values; documented clamping', () => {
-    expect(sanitizeOverrides(JSON.parse('{"__proto__":{"polluted":true},"constructor":{},"minTurnDelay":"0","critChance":null,"unknown":5}'))).toEqual({});
-    expect(sanitizeOverrides({ minTurnDelay: Infinity, critChance: NaN })).toEqual({});
-    expect(sanitizeOverrides({ minTurnDelay: -5 })).toEqual({ minTurnDelay: 5 });
-    expect(DEFAULT_CONFIG.minTurnDelay).toBe(25);
+    expect(sanitizeOverrides(JSON.parse('{"__proto__":{"polluted":true},"constructor":{},"noActionTurnAp":"0","critChance":null,"unknown":5}'))).toEqual({});
+    expect(sanitizeOverrides({ noActionTurnAp: Infinity, critChance: NaN })).toEqual({});
+    expect(sanitizeOverrides({ noActionTurnAp: -5 })).toEqual({ noActionTurnAp: 5 });
+    expect(DEFAULT_CONFIG.noActionTurnAp).toBe(25);
     expect(() => applyAction(duel(), { type: 'move', unitId: 'jubal', to: { x: -1, y: -1 } })).toThrow(RulesError);
   });
 });

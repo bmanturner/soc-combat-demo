@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { Vec } from '../rules/geometry';
 import type { BattleState, GameEvent, UnitState } from '../rules/types';
@@ -12,7 +13,7 @@ import { TOUCH_UI_QUERY, store, type GameStore } from '../game/store';
 import { choreograph, type Ease, type Stage } from '../board/choreography';
 import { COLORS } from '../board/palette';
 import { boardView, boardViewChanged, unitCenter, type FillLayer, type LineLayer, type Pt } from '../board/view-model';
-import { GroundShape, PAWN_HEIGHT, PX, applyOpacity, makeToken, overlayMaterial, paintToken, type Token3D } from './meshes';
+import { GroundShape, PAWN_HEIGHT, PX, applyOpacity, makeToken, overlayMaterial, paintToken, platePainted, sizePlate, type Token3D } from './meshes';
 import { makeProjectile } from './projectiles';
 import type { Projectile } from './rig';
 import { EASE, TweenClock, yoyo } from './tweens';
@@ -95,6 +96,7 @@ export class ThreeBoard implements Animator, Stage {
   private readonly leaders: SVGSVGElement;
   private readonly floatLayer: HTMLDivElement;
   private readonly chrome: HTMLDivElement;
+  private readonly outlinesButton: HTMLButtonElement;
   private readonly resizeObserver: ResizeObserver;
   private readonly raycaster = new THREE.Raycaster();
   private readonly ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -125,6 +127,8 @@ export class ThreeBoard implements Animator, Stage {
   private version = -1;
   private unsub: () => void;
   private destroyed = false;
+  /** Team-colour figure outlines; built on first use, while the toggle is on. */
+  private outline: { party: OutlinePass; enemy: OutlinePass } | null = null;
 
   constructor(private readonly host: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -148,7 +152,13 @@ export class ThreeBoard implements Animator, Stage {
     reset.textContent = 'Reset view';
     reset.dataset.testid = 'board3d-reset';
     reset.addEventListener('click', () => this.resetView());
-    this.chrome.append(hint, reset);
+    this.outlinesButton = el('button', 'board3d-reset');
+    this.outlinesButton.textContent = 'Outlines';
+    this.outlinesButton.dataset.testid = 'board3d-outlines';
+    this.outlinesButton.title = 'Team-colour outlines around figures';
+    this.outlinesButton.addEventListener('click', () => controller.setBoardOutlines(!store.getState().boardOutlines));
+    this.syncOutlinesButton();
+    this.chrome.append(hint, this.outlinesButton, reset);
     host.append(this.leaders, this.labelLayer, this.floatLayer, this.chrome);
 
     this.scene.background = new THREE.Color(COLORS.bg);
@@ -222,6 +232,8 @@ export class ThreeBoard implements Animator, Stage {
     if (w.__soc?.labelBounds === this.labelBoundsHook) delete w.__soc.labelBounds;
     this.controls.dispose();
     disposeTree(this.scene);
+    this.outline?.party.dispose();
+    this.outline?.enemy.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
@@ -257,7 +269,15 @@ export class ThreeBoard implements Animator, Stage {
     const box = (r: DOMRect) => ({ x: r.x - origin.x, y: r.y - origin.y, width: r.width, height: r.height });
     return {
       labels: this.labels.map((l) => ({ text: l.el.textContent ?? '', ...box(l.el.getBoundingClientRect()) })),
-      units: this.tokenBounds().map((t) => ({ id: t.id, x: t.box.x, y: t.box.y, width: t.box.w, height: t.box.h })),
+      units: this.tokenBounds().map((t) => ({
+        id: t.id,
+        x: t.box.x,
+        y: t.box.y,
+        width: t.box.w,
+        height: t.box.h,
+        body: t.body && { x: t.body.x, y: t.body.y, width: t.body.w, height: t.body.h },
+        plate: { x: t.plate.x, y: t.plate.y, width: t.plate.w, height: t.plate.h },
+      })),
     };
   };
 
@@ -268,10 +288,32 @@ export class ThreeBoard implements Animator, Stage {
     this.leaders.setAttribute('viewBox', `0 0 ${this.width} ${this.height}`);
     this.camera.aspect = this.width / this.height;
     this.applyViewOffset(0, 0);
+    const pr = this.renderer.getPixelRatio();
+    this.outline?.party.setSize(this.width * pr, this.height * pr);
+    this.outline?.enemy.setSize(this.width * pr, this.height * pr);
     this.layoutDirty = true;
     const dir = this.camera.position.clone().sub(this.controls.target);
     this.fit(dir.lengthSq() > 0 ? dir.normalize() : HOME_DIRECTION);
+    this.sizePlates();
     this.measureLabels();
+  }
+
+  /** Plates keep a constant CSS-pixel size: world units per pixel at unit depth for a size-unattenuated sprite. */
+  private sizePlates(): void {
+    const unitsPerPx = this.unitsPerPx();
+    for (const t of this.tokens.values()) sizePlate(t, unitsPerPx);
+  }
+
+  private unitsPerPx(): number {
+    return 2 / (this.camera.projectionMatrix.elements[5]! * this.height);
+  }
+
+  private addToken(u: UnitState): Token3D {
+    const tok = makeToken(u);
+    this.tokens.set(u.id, tok);
+    this.tokenGroup.add(tok.root);
+    sizePlate(tok, this.unitsPerPx());
+    return tok;
   }
 
   /** Shift the image down by half the lane so the board centers in the space below it. */
@@ -325,11 +367,7 @@ export class ThreeBoard implements Animator, Stage {
     this.boardW = b.map.width;
     this.boardH = b.map.height;
     this.buildMap(b);
-    for (const u of b.units) {
-      const tok = makeToken(u);
-      this.tokens.set(u.id, tok);
-      this.tokenGroup.add(tok.root);
-    }
+    for (const u of b.units) this.addToken(u);
     const span = Math.max(this.boardW, this.boardH);
     this.sun.position.set(-span * 0.45, span * 0.9, span * 0.55);
     const cam = this.sun.shadow.camera;
@@ -343,6 +381,7 @@ export class ThreeBoard implements Animator, Stage {
   }
 
   private onStore(s: GameStore, prev: GameStore): void {
+    if (s.boardOutlines !== prev.boardOutlines) this.syncOutlinesButton();
     if (s.boardVersion !== this.version) {
       this.version = s.boardVersion;
       this.rebuild();
@@ -351,6 +390,12 @@ export class ThreeBoard implements Animator, Stage {
     if (boardViewChanged(s, prev)) {
       this.refresh();
     }
+  }
+
+  private syncOutlinesButton(): void {
+    const on = store.getState().boardOutlines;
+    this.outlinesButton.setAttribute('aria-pressed', String(on));
+    this.outlinesButton.classList.toggle('on', on);
   }
 
   // ---------------- Static map ----------------
@@ -426,8 +471,7 @@ export class ThreeBoard implements Animator, Stage {
 
     if (!this.animating) {
       for (const tv of view.tokens) {
-        const tok = this.tokens.get(tv.unit.id);
-        if (!tok) continue;
+        const tok = this.tokens.get(tv.unit.id) ?? this.addToken(tv.unit);
         tok.root.position.copy(this.world(unitCenter(tv.unit)));
         tok.root.scale.setScalar(1);
         tok.flash = 1;
@@ -520,34 +564,29 @@ export class ThreeBoard implements Animator, Stage {
   }
 
   /** Projected screen bounds of every token: the solid body and the floating plate, plus their union. */
-  private tokenBounds(): { id: string; parts: Rect[]; box: Rect }[] {
+  private tokenBounds(): { id: string; body: Rect | null; plate: Rect; parts: Rect[]; box: Rect }[] {
     this.camera.updateMatrixWorld();
-    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
-    const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+    const pxPerUnit = (this.camera.projectionMatrix.elements[5]! * this.height) / 2;
     return [...this.tokens.values()].map((t) => {
       t.root.updateMatrixWorld(true);
-      const body = new THREE.Box3();
-      for (const p of t.pickables) body.expandByObject(p);
-      const parts: Rect[] = [];
-      if (!body.isEmpty()) parts.push(this.boxRect(body));
-      const c = t.plate.getWorldPosition(new THREE.Vector3());
+      const box3 = new THREE.Box3();
+      for (const p of t.pickables) box3.expandByObject(p);
+      const body = box3.isEmpty() ? null : this.boxRect(box3);
+      // Size-unattenuated sprite: its screen size is fixed; it draws around its anchor (`center`).
       const k = t.root.scale.x;
-      // The pawn plate's painted content (medallion, HP bar) spans about 55% of the sprite width.
-      const hw = (t.plate.scale.x * k * (t.big ? 1 : 0.55)) / 2;
-      const hh = (t.plate.scale.y * k) / 2;
-      // The sprite draws around its anchor (`center`); shift to the drawn centre.
-      c.addScaledVector(up, (0.5 - t.plate.center.y) * 2 * hh);
-      const cs = this.screen(c);
-      const cr = this.screen(c.clone().addScaledVector(right, hw));
-      const cu = this.screen(c.clone().addScaledVector(up, hh));
-      const pw = Math.abs(cr.x - cs.x);
-      const ph = Math.abs(cu.y - cs.y);
-      parts.push({ x: cs.x - pw, y: cs.y - ph, w: 2 * pw, h: 2 * ph });
+      const s = this.screen(t.plate.getWorldPosition(new THREE.Vector3()));
+      const pw = t.plate.scale.x * k * pxPerUnit;
+      const ph = t.plate.scale.y * k * pxPerUnit;
+      const left = s.x - t.plate.center.x * pw;
+      const top = s.y - (1 - t.plate.center.y) * ph;
+      const f = platePainted(t);
+      const plate = { x: left + f.x0 * pw, y: top + f.y0 * ph, w: (f.x1 - f.x0) * pw, h: (f.y1 - f.y0) * ph };
+      const parts = body ? [body, plate] : [plate];
       const x0 = Math.min(...parts.map((r) => r.x));
       const y0 = Math.min(...parts.map((r) => r.y));
       const x1 = Math.max(...parts.map((r) => r.x + r.w));
       const y1 = Math.max(...parts.map((r) => r.y + r.h));
-      return { id: t.unitId, parts, box: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } };
+      return { id: t.unitId, body, plate, parts, box: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } };
     });
   }
 
@@ -736,6 +775,18 @@ export class ThreeBoard implements Animator, Stage {
     this.applyViewOffset(dx, dy);
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
+    if (store.getState().boardOutlines) {
+      const o = this.outlinePasses();
+      o.party.selectedObjects.length = 0;
+      o.enemy.selectedObjects.length = 0;
+      for (const u of this.battle()?.units ?? []) {
+        const fig = this.tokens.get(u.id)?.figure;
+        if (fig && !u.ko) (u.side === 'player' ? o.party : o.enemy).selectedObjects.push(fig.object);
+      }
+      // A null read buffer makes each pass blend its edges additively straight onto the rendered frame,
+      // so the scene itself (tone mapping, untone-mapped overlays) renders exactly as without outlines.
+      for (const p of [o.party, o.enemy]) if (p.selectedObjects.length) p.render(this.renderer, null as never, null as never, dt / 1000, false);
+    }
 
     // Labels re-place only when the camera, canvas or board changed (or tokens are moving).
     const e = this.camera.matrixWorld.elements;
@@ -750,6 +801,23 @@ export class ThreeBoard implements Animator, Stage {
       f.el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -50%)`;
     }
   };
+
+  private outlinePasses(): { party: OutlinePass; enemy: OutlinePass } {
+    if (this.outline) return this.outline;
+    const pr = this.renderer.getPixelRatio();
+    const pass = (color: string) => {
+      const p = new OutlinePass(new THREE.Vector2(this.width * pr, this.height * pr), this.scene, this.camera);
+      // The overlay shader writes straight to the sRGB canvas without conversion: give it sRGB components.
+      p.visibleEdgeColor.setStyle(color, THREE.LinearSRGBColorSpace);
+      p.hiddenEdgeColor.set('#000000'); // additive black: no outline through walls
+      p.edgeStrength = 3;
+      p.edgeThickness = 1;
+      p.edgeGlow = 0;
+      return p;
+    };
+    this.outline = { party: pass(COLORS.party), enemy: pass(COLORS.enemy) };
+    return this.outline;
+  }
 
   // ---------------- Animation ----------------
 
@@ -912,6 +980,14 @@ export class ThreeBoard implements Animator, Stage {
       tok.flash = p >= 1 ? 1 : 0.35 + 0.65 * yoyo(p, 4);
       applyOpacity(tok);
     });
+  }
+
+  async spawnToken(unit: UnitState, ms: number): Promise<void> {
+    const tok = this.tokens.get(unit.id) ?? this.addToken(unit);
+    tok.root.position.copy(this.world(unitCenter(unit)));
+    paintToken(tok, unit, false, false);
+    tok.root.scale.setScalar(0.01);
+    await this.tween(ms, (p) => tok.root.scale.setScalar(Math.max(0.01, EASE.back(p))));
   }
 
   async fadeToken(id: string, alpha: number, ms: number): Promise<void> {

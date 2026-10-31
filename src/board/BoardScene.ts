@@ -175,7 +175,7 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
     if (!b) return;
     this.layout(b);
     this.drawMap(b);
-    for (const u of b.units) this.tokens.set(u.id, this.makeToken(u));
+    for (const u of b.units) this.addToken(u);
     this.refresh();
   }
 
@@ -251,6 +251,12 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
     }
     const tok: Token = { root, body, glyph, hp, badge, w, h };
     this.paint(tok, u, false, false);
+    return tok;
+  }
+
+  private addToken(u: UnitState): Token {
+    const tok = this.makeToken(u);
+    this.tokens.set(u.id, tok);
     return tok;
   }
 
@@ -377,10 +383,10 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
 
     if (!this.animating) {
       for (const tv of view.tokens) {
-        const tok = this.tokens.get(tv.unit.id);
-        if (!tok) continue;
+        const tok = this.tokens.get(tv.unit.id) ?? this.addToken(tv.unit);
         const c = this.px(unitCenter(tv.unit));
         tok.root.setPosition(c.x, c.y);
+        tok.root.setScale(1);
         this.paint(tok, tv.unit, tv.active, tv.hovered);
         tok.badge.setText(tv.badge);
         tok.badge.setScale(Math.min(1, (tok.w - 4) / Math.max(1, tok.badge.width)));
@@ -493,6 +499,12 @@ export class BoardScene extends Phaser.Scene implements Animator, Stage {
   async fadeToken(id: string, alpha: number, ms: number): Promise<void> {
     const root = this.tokenRoot(id);
     if (root) await this.tween({ targets: root, alpha, duration: ms });
+  }
+
+  async spawnToken(unit: UnitState, ms: number): Promise<void> {
+    const tok = this.tokens.get(unit.id) ?? this.addToken(unit);
+    tok.root.setScale(0.2).setAlpha(0);
+    await this.tween({ targets: tok.root, scale: 1, alpha: 1, duration: ms, ease: EASES.back });
   }
 
   paintToken(id: string, unit: UnitState, active: boolean): void {

@@ -92,10 +92,38 @@ const WEAPON_SEEDS: Record<string, Omit<WeaponDef, 'modes' | 'basicSkill' | 'pro
     attack: { name: 'Bite', pattern: 'cardinal', apCost: 80, damage: 10, hit: 0.75, pctPen: 0, flatPen: 0, ...phys },
     canEngage: true, engagement: 1, disengagement: 3, parry: 0, block: 0, dodgeBonus: 0, skills: [], blurb: '',
   },
+  // Brood rat: 25 damage per 100 AP (Drafts/09 / Tentative Math small rat), without the Granary's tutorial cut.
+  brood_rat_bite: {
+    id: 'brood_rat_bite', name: 'Bite', family: 'natural',
+    attack: { name: 'Bite', pattern: 'cardinal', apCost: 80, damage: 20, hit: 0.75, pctPen: 0, flatPen: 0, ...phys },
+    canEngage: true, engagement: 1, disengagement: 3, parry: 0, block: 0, dodgeBonus: 0, skills: [], blurb: '',
+  },
+  // Large rat: 35 damage per 100 AP (Tentative Math).
+  large_rat_bite: {
+    id: 'large_rat_bite', name: 'Bite', family: 'natural',
+    attack: { name: 'Bite', pattern: 'cardinal', apCost: 80, damage: 28, hit: 0.75, pctPen: 0, flatPen: 0, ...phys },
+    canEngage: true, engagement: 1, disengagement: 3, parry: 0, block: 0, dodgeBonus: 0, skills: [], blurb: '',
+  },
   wolf_bite: {
     id: 'wolf_bite', name: 'Bite', family: 'natural',
     attack: { name: 'Bite', pattern: 'adjacent', apCost: 80, damage: 40, hit: 0.8, pctPen: 0, flatPen: 10, ...phys },
     canEngage: true, engagement: 2, disengagement: 4, parry: 0, block: 0, dodgeBonus: 0, skills: [], blurb: '',
+  },
+  // Bandits: damage per 100 AP follows Tentative Math (fighter 60, archer 55).
+  bandit_blade: {
+    id: 'bandit_blade', name: 'Bronze Sword & Buckler', family: 'natural',
+    attack: { name: 'Sword cut', pattern: 'pairCw', apCost: 75, damage: 45, hit: 0.82, pctPen: 0, flatPen: 10, ...phys },
+    canEngage: true, engagement: 4, disengagement: 1, parry: 0.05, block: 0.2, dodgeBonus: 0, skills: [], blurb: '',
+  },
+  bandit_bow: {
+    id: 'bandit_bow', name: 'Short Bow', family: 'natural',
+    attack: { name: 'Arrow', pattern: 'ranged', apCost: 75, stationaryDiscount: true, range: [2, 8], damage: 41, hit: 0.8, pctPen: 0, flatPen: 5, damageType: 'physical', ranged: true },
+    canEngage: false, engagement: 0, disengagement: 2, parry: 0, block: 0, dodgeBonus: 0, skills: [], blurb: '',
+  },
+  brood_bite: {
+    id: 'brood_bite', name: 'Bite', family: 'natural',
+    attack: { name: 'Bite', pattern: 'adjacent', apCost: 80, damage: 22, hit: 0.75, pctPen: 0, flatPen: 0, ...phys },
+    canEngage: true, engagement: 1, disengagement: 3, parry: 0, block: 0, dodgeBonus: 0, skills: [], blurb: '',
   },
   cultist_blade: {
     id: 'cultist_blade', name: 'Ritual Blade & Shield', family: 'shield',
@@ -157,7 +185,7 @@ export const WEAPONS: Record<string, WeaponDef> = Object.fromEntries(Object.valu
     ? [{ ...w.attack, id }, { ...w.attack, id: 'throw', name: 'Javelin throw', pattern: 'ranged', range: [2, 4], apCost: 125, damage: 70, ranged: true }]
     : w.family === 'colossal' ? [{ ...w.attack, id }, { ...w.attack, id: 'sweep', name: 'Colossal sweep', pattern: 'ring8' }]
     : [{ ...w.attack, id, ...(w.family === 'crossbow' ? { ammo: 'bolt' as const } : {}) }];
-  const tentative = ['daggers', 'shield', 'polearm', 'two_handed', 'hunting_bow', 'crossbow'].includes(w.id);
+  const tentative = ['daggers', 'shield', 'polearm', 'two_handed', 'hunting_bow', 'crossbow', 'bandit_blade', 'bandit_bow', 'brood_rat_bite', 'large_rat_bite'].includes(w.id);
   const source = PLAYER_WEAPON_IDS.some(x => x === w.id) || w.id === 'shepherds_club';
   const fields: Record<string, FieldProvenance> = Object.fromEntries([...Object.keys(w), 'basicSkill', 'proficiencySkill'].map(k => [k, DEMO_FIELD]));
   if (w.reloadAp) fields.reloadAp = sourceField('“On their next turn, they need to use a combat action to reload it, which also costs 50 AP.”');
@@ -196,6 +224,8 @@ const SKILL_SEEDS: Record<string, Omit<SkillDef, 'provenance' | 'fieldProvenance
   aimed_shot: { id: 'aimed_shot', name: 'Aimed Shot', kind: 'shot', apCost: 100, cooldown: 200, range: [2, 10], needsLos: true, damageMult: 1.4, hitBonus: 0.1, stationaryDiscount: true, description: 'A precise, powerful shot. Moving this turn adds the configured bow surcharge.', status: 'demo' },
   // [source] cultist mages have basic crowd control. Specific spells [demo].
   daze_bolt: { id: 'daze_bolt', name: 'Daze Bolt', kind: 'shot', apCost: 100, cooldown: 150, range: [2, 6], needsLos: true, damageMult: 1, rawDamage: 35, damageType: 'magic', applies: 'dazed', description: 'A ranged magic bolt that dazes.', status: 'demo' },
+  // [source] concept: the brood mother summons smaller rats. Large Rats among them, and all numbers, are [demo].
+  call_the_brood: { id: 'call_the_brood', name: 'Call the Brood', kind: 'summon', apCost: 100, cooldown: 150, damageMult: 1, summon: { template: 'brood_rat', name: 'Brood Rat', count: 2, delay: 50, variant: { template: 'large_rat', name: 'Large Rat' } }, description: 'Calls up to two rats onto open tiles beside her, each sometimes a Large Rat; they act 50 AP later.', status: 'source' },
   // Nephilim. Numbers come from the rules config (Nephilim group) so they can be tuned live.
   nephilim_sweep: { id: 'nephilim_sweep', name: 'Sweeping Arm', kind: 'sweep', allowedReactions: [], special: 'sweep', apCost: 100, cooldown: 0, damageMult: 1, damageType: 'physical', description: 'Telegraphs a sweep across the whole zone in front of him. Lands after a delay. Lethal.', status: 'source' },
   rock_throw: { id: 'rock_throw', name: 'Rock Throw', kind: 'shot', special: 'rockThrow', apCost: 100, cooldown: 0, range: [2, 12], needsLos: true, damageMult: 1, rawDamage: 110, hitBonus: -0.05, damageType: 'physical', description: 'Hurls debris at an exposed target. Cover blocks it.', status: 'source' },

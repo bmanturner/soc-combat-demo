@@ -57,7 +57,7 @@ describe("weapon UI projections", () => {
       busy: false,
     })!;
     expect(p.extra).toBe(expected.apCost);
-    expect(p.projected).toBe(projectedNextTurn(b, expected.apCost));
+    expect(p.projected).toBe(projectedNextTurn(b, expected.apCost, true));
     expect(b).toEqual(snapshot);
   });
 });

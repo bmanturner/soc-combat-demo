@@ -30,7 +30,7 @@ function assertPreview(s: BattleState, a: Action): void {
   const u = jubal(s);
   const p = a.type === 'attack' ? previewAttack(s, u, a.target, u.pos, a.modeId) : a.type === 'skill' ? previewSkill(s, u, a.skillId, a.target) : null;
   expect(p).not.toBeNull();
-  const delay = projectedNextTurn(s, p!.apCost);
+  const delay = projectedNextTurn(s, p!.apCost, true);
   const result = applyAction(s, a);
   expect(result.state.active!.actionSpent).toBe(p!.apCost);
   for (const e of result.events) if (e.t === 'strike') {
@@ -75,7 +75,7 @@ describe('catalog, encounter and tuning golden', () => {
     const config = withOverrides({ wpn_colossal_dmg: 99, wpn_crossbow_hit: -.9, weaponSwapAp: 1 });
     expect(config).toMatchObject({ wpn_colossal_dmg: 1.5, wpn_crossbow_hit: -.2, weaponSwapAp: 25 });
     const keys = SETTINGS.filter(s => ['Weapon tuning','Enemy tuning','Weapons'].includes(s.group));
-    expect(keys).toHaveLength(32);
+    expect(keys).toHaveLength(42);
     expect(keys.every(s => s.status === 'demo' && s.why)).toBe(true);
     expect(DEFAULT_CONFIG).toMatchObject({ proficientAllWeapons: true, unlockSpecialWeapons:true, crossbowReload:'flexible' });
   });

@@ -25,8 +25,11 @@ colors:
   wall-soot: "#231d18"
   cover-timber: "#6d5536"
   floor-granary: "#6b5a3e"
+  floor-nest: "#5f5139"
   floor-road: "#7a6a48"
+  floor-trail: "#76664a"
   floor-shrine: "#57493f"
+  floor-valley: "#7d6c4c"
   floor-cave: "#4b4a51"
 typography:
   display:
@@ -190,7 +193,7 @@ A soot-and-parchment ground lit by two metals, with a strictly semantic game pal
 - **Ash Line** (`ash-line`): every hairline border and divider.
 - **Parchment** (`parchment`): primary text.
 - **Faded Ink** (`faded-ink`): secondary text, hints, captions, disabled-adjacent copy.
-- **Wall Soot**, **Cover Timber** and the four encounter floors (`floor-granary`, `floor-road`, `floor-shrine`, `floor-cave`): board terrain only, shared by the 2D and 3D boards via `src/board/palette.ts`.
+- **Wall Soot**, **Cover Timber** and the encounter floors (`floor-granary`, `floor-nest`, `floor-road`, `floor-trail`, `floor-shrine`, `floor-valley`, `floor-cave`): board terrain only, shared by the 2D and 3D boards via `src/board/palette.ts`.
 
 ### Named Rules
 **The Forge Gold Rule.** Gold marks the single live thing — the active unit, the current selection, the next action to take. If two unrelated things on a screen are gold, one of them is wrong.
@@ -280,7 +283,7 @@ The defining component. A horizontal track (gradient `#2a2219` → `#1f1913`, ha
 Small pill badges (10px text, 1px border, transparent fill) attached to every tunable rule and stat: Ready Green for Aaron's rule, Warning Amber for tentative math, a pale blue (`#9fb6ff`) for demo default. They are the visible expression of the product's honesty about sources and must accompany any new tunable value.
 
 ### Board Tokens
-Circular tokens in side colors with a serif glyph, an HP bar beneath (green above 50%, amber above 25%, red below) and an uppercase status badge above (DAZED · FEARED · FLANKED in amber-gold). KO'd units fade to 22% opacity. Floating combat text rises and fades over 1.1s in bold sans with a black stroke: damage in red, crits in gold, misses in gray, avoids in pale blue. At a telegraph's impact, party members who stepped out show ESCAPED in Ready Green and caught party members show the reason beneath the damage in soft red (`#ffb3a6`): TOO LATE, NO WAY OUT, HELD or STAYED IN. The 2D and 3D boards share these semantics exactly; 3D stands each unit on a side-colored base disc and ring with a floating plate carrying the same glyph, status and HP. Every unit is a posed low-poly figure in earthy, unsaturated materials (side color stays on the base, ring and plate; cultists wear charcoal, not true black, so they separate from the shrine floor). Humanoids wear their armour class (robe, leather, bronze scale, bronze plate with crested helmet). The Trapped Nephilim holds his free arm raised while his sweep is pending: the telegraph is in the figure as well as on the floor. Projectiles fly for ranged strikes; area effects are cast with nothing flying.
+Circular tokens in side colors with a serif glyph, an HP bar beneath (green above 50%, amber above 25%, red below) and an uppercase status badge above (DAZED · FEARED · FLANKED in amber-gold). KO'd units fade to 22% opacity; units summoned mid-battle (the Brood Mother's rats) grow into place. Floating combat text rises and fades over 1.1s in bold sans with a black stroke: damage in red, crits in gold, misses in gray, avoids in pale blue. At a telegraph's impact, party members who stepped out show ESCAPED in Ready Green and caught party members show the reason beneath the damage in soft red (`#ffb3a6`): TOO LATE, NO WAY OUT, HELD or STAYED IN. The 2D and 3D boards share these semantics exactly; 3D stands each unit on a side-colored base disc and ring with a floating plate carrying the same glyph, status and HP. Every unit is a posed low-poly figure in earthy, unsaturated materials (side color stays on the base, ring and plate; cultists wear charcoal, not true black, so they separate from the shrine floor). Humanoids wear their armour class (robe, leather, bronze scale, bronze plate with crested helmet). The Trapped Nephilim holds his free arm raised while his sweep is pending: the telegraph is in the figure as well as on the floor. Projectiles fly for ranged strikes; area effects are cast with nothing flying.
 
 ### Lesson Card
 A one-time teaching note docked at the top of the right panel, above Incoming: Hearth Brown fill, Cast Bronze hairline, 8px radius, a 13px sans heading (not serif: it is not a name), soft-parchment body, a faded "1 of 3" step count, and a quiet text-style Skip beside a default Next button. Its subject is outlined by a parchment ring (2px, with a 1px soot edge for contrast on the board) that never takes pointer input and eases in over 260ms (no motion under reduced-motion). Lessons never cover the board and never block play.

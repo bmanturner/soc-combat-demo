@@ -3,7 +3,7 @@ import { encounterById } from "../content/encounters";
 import { WEAPONS } from "../content/gear";
 import { DEFAULT_CONFIG } from "../rules/config";
 import { applyAction, createBattle } from "../rules/engine";
-import { report } from "../hud/Screens";
+import { fightReport } from "./report";
 import { battleShareUrl, decodeShare } from "./share";
 
 it("report and battle links preserve both starting weapons after a real swap", () => {
@@ -22,7 +22,7 @@ it("report and battle links preserve both starting weapons after a real swap", (
       secondaryWeaponId: "shield",
       equippedSlot: 0,
     });
-    const text = report(b);
+    const text = fightReport(b);
     expect(text).toContain(WEAPONS.crossbow!.name);
     expect(text).toContain(WEAPONS.shield!.name);
     expect(text).toContain("reloads 0, swaps 1");

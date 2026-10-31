@@ -34,17 +34,21 @@ import type {
   ReactionResult,
   Setup,
   Terrain,
+  SkillDef,
   UnitState,
   UnitTelemetry,
 } from './types';
-import { reachable } from './queries';
+import { escapeOutlook, reachable } from './queries';
 
 export class RulesError extends Error {}
 
 const emptyTelemetry = (): UnitTelemetry => ({
   reloads: 0, swaps: 0,
-  turns: 0, moveAp: 0, actionAp: 0, waitAp: 0, damageDealt: 0, damageTaken: 0, attacks: 0, hits: 0, kos: 0,
-  escapes: 0, caught: 0, disengageAttempts: 0, disengageFails: 0,
+  turns: 0, turnsAllIn: 0, turnsActedWithMoveLeft: 0, turnsNoAction: 0, moveLeftAp: 0,
+  moveAp: 0, actionAp: 0, waitAp: 0, reactionAp: 0, dazedAp: 0,
+  damageDealt: 0, damageTaken: 0, attacks: 0, hits: 0, kos: 0,
+  escapes: 0, caught: 0, caughtBy: { late: 0, trapped: 0, held: 0, stayed: 0 }, caughtAfterSafePreview: 0,
+  disengageAttempts: 0, disengageFails: 0, downed: null, patterns: {},
 });
 
 const TERRAIN: Record<string, Terrain> = { '.': 'floor', '#': 'wall', o: 'cover', '~': 'pit' };
@@ -115,6 +119,19 @@ function buildUnit(p: Placement, order: number, level: number, config: RulesConf
   return u;
 }
 
+/** Units sharing a template get 1-based numbers in placement order (W1, W2, W3) so every view can tell them apart. */
+function numberDuplicateGlyphs(units: UnitState[]): void {
+  const count = new Map<string, number>();
+  for (const u of units) count.set(u.templateId, (count.get(u.templateId) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  for (const u of units) {
+    if ((count.get(u.templateId) ?? 0) < 2) continue;
+    const n = (seen.get(u.templateId) ?? 0) + 1;
+    seen.set(u.templateId, n);
+    u.glyph = `${u.glyph}${n}`;
+  }
+}
+
 export function createBattle(enc: EncounterDef, setup: Setup, config: RulesConfig, seed: number): { state: BattleState; events: GameEvent[] } {
   setup = validateSetup(enc, setup, config);
   const tiles: Terrain[] = [];
@@ -129,6 +146,7 @@ export function createBattle(enc: EncounterDef, setup: Setup, config: RulesConfi
     const level = tpl?.side === 'player' ? enc.jubalLevel : (tpl?.level ?? 1);
     return buildUnit(p, i, level, config, setup);
   });
+  numberDuplicateGlyphs(units);
   if (new Set(units.flatMap(u => u.carried.filter(item => item !== null).map(item => item.instanceId))).size !== units.flatMap(u => u.carried.filter(item => item !== null)).length) throw new RulesError('duplicate weapon instance identities');
   const state: BattleState = {
     setup: { weaponIds: [...setup.weaponIds!], equippedSlot: setup.equippedSlot ?? 0, armor: setup.armor },
@@ -279,15 +297,24 @@ function endTurn(state: BattleState, unit: UnitState, events: GameEvent[]): void
   if (!a || a.unitId !== unit.id) return;
   const spent = turnSpent(state);
   // Bosses keep a steady rhythm: even a turn spent watching costs a full boss turn.
-  const delay = turnDelay(state, unit, spent);
+  // Everyone else who ends without acting pays the no-action surcharge on top of movement (telemetry waitAp).
+  const delay = turnDelay(state, unit, spent, a.acted);
   unit.nextTurnAt = round3(a.startedAt + delay);
   const tel = state.telemetry[unit.id];
   if (tel) {
+    // "All in" means no whole tile of movement left; a fraction of a step is not usable movement.
+    const moveLeft = a.movementLocked ? 0 : Math.max(0, state.config.movementBudget - a.moveSpent);
+    const tileLeft = moveLeft + 1e-6 >= unit.moveApPerTile;
     tel.turns += 1;
+    if (!a.acted) tel.turnsNoAction += 1;
+    else if (tileLeft) tel.turnsActedWithMoveLeft += 1;
+    else tel.turnsAllIn += 1;
+    if (!unit.immobile) tel.moveLeftAp += moveLeft;
     tel.moveAp += a.moveSpent;
     tel.actionAp += a.actionSpent;
     tel.waitAp += delay - spent;
   }
+  notePreviews(state, unit);
   if (unit.dazed) {
     unit.dazed = false;
     events.push({ t: 'status', unitId: unit.id, status: 'recovered' });
@@ -295,6 +322,17 @@ function endTurn(state: BattleState, unit: UnitState, events: GameEvent[]): void
   unit.feared = false;
   events.push({ t: 'turnEnd', unitId: unit.id, spent, delay, nextTurnAt: unit.nextTurnAt });
   state.active = null;
+}
+
+/** At a turn end inside a pending area, keep what the next-turn ghost would say: can this unit still get out? */
+function notePreviews(state: BattleState, unit: UnitState): void {
+  for (const eff of state.effects) {
+    if (!effectCanHit(state, eff, unit)) continue;
+    const inside = tilesOf(unit).some((t) => eff.tiles.some((x) => eq(x, t)));
+    const previews = (eff.endTurnPreviewSafe ??= {});
+    if (inside) previews[unit.id] = escapeOutlook(state, unit, eff, { nextAt: unit.nextTurnAt }).canEscape;
+    else delete previews[unit.id];
+  }
 }
 
 function pushBack(state: BattleState, u: UnitState, ap: number): void {
@@ -406,6 +444,8 @@ function resolveReactions(state: BattleState, origin: Vec, target: UnitState, pr
     if (!rr.success) continue;
     result.avoided = o.kind;
     pushBack(state, target, o.ap);
+    const tt = state.telemetry[target.id];
+    if (tt) tt.reactionAp += o.ap;
     if (o.kind === 'dodge' && state.config.dodgeDisplaces) {
       const away = { x: sign(target.pos.x - origin.x), y: sign(target.pos.y - origin.y) };
       const dest = add(target.pos, away);
@@ -449,7 +489,7 @@ export function strike(state: BattleState, attacker: UnitState, target: UnitStat
   const effective = Math.max(0, defense * (1 - pct) - profile.flatPen);
   const amount = resolvedDamage(state, target, raw, dtype, pct, profile.flatPen);
   Object.assign(ev, { raw: round3(raw), crit, defense, effectiveDefense: round3(effective), flanked, damage: amount });
-  dealDamage(state, attacker, target, amount, events);
+  dealDamage(state, attacker, target, amount, `${attacker.name}: ${profile.name}`);
   ev.hpAfter = target.hp;
   events.push(ev);
   if (target.ko) events.push({ t: 'ko', unitId: target.id });
@@ -458,7 +498,7 @@ export function strike(state: BattleState, attacker: UnitState, target: UnitStat
   return ev;
 }
 
-function dealDamage(state: BattleState, source: UnitState | null, target: UnitState, amount: number, _events: GameEvent[]): void {
+function dealDamage(state: BattleState, source: UnitState | null, target: UnitState, amount: number, by: string): void {
   target.hp = Math.max(0, target.hp - amount);
   const tt = state.telemetry[target.id];
   if (tt) tt.damageTaken += amount;
@@ -468,6 +508,7 @@ function dealDamage(state: BattleState, source: UnitState | null, target: UnitSt
   }
   if (target.hp <= 0 && !target.ko) {
     target.ko = true;
+    if (tt) tt.downed = { at: state.clock, by };
     if (source) {
       const st = state.telemetry[source.id];
       if (st) st.kos += 1;
@@ -479,6 +520,8 @@ function applyDazed(state: BattleState, target: UnitState, events: GameEvent[]):
   const push = round3(state.config.dazedPushback * (target.massive ? state.config.bossDazeMult : 1));
   target.dazed = true;
   pushBack(state, target, push);
+  const tel = state.telemetry[target.id];
+  if (tel) tel.dazedAp += push;
   events.push({ t: 'status', unitId: target.id, status: 'dazed', pushback: push });
 }
 
@@ -543,6 +586,7 @@ function doAttack(state: BattleState, unit: UnitState, target: Vec, events: Game
   a.actionSpent += cost;
   a.acted = true;
   events.push({ t: 'attack', attackerId: unit.id, name: profile.name, tiles: res.tiles, apCost: cost, targetTile: target });
+  const first = events.length;
   for (const h of res.hits) {
     if (h.unit.ko) continue;
     strike(state, unit, h.unit, profile, ringPenalty(state, h.ring), events);
@@ -554,6 +598,34 @@ function doAttack(state: BattleState, unit: UnitState, target: Vec, events: Game
       strike(state, unit, secondary, profile, 0, events);
     }
   }
+  recordPattern(state, unit, profile.name, 'attack', unit.weaponId, events.slice(first));
+}
+
+/** Tally how one attack or skill use landed: distinct enemies swung at and damaged, allies caught in it. */
+function recordPattern(state: BattleState, unit: UnitState, name: string, kind: 'attack' | 'skill', weaponId: string | null, events: GameEvent[]): void {
+  const tel = state.telemetry[unit.id];
+  if (!tel) return;
+  const targeted = new Set<string>();
+  const damaged = new Set<string>();
+  const allies = new Set<string>();
+  let damage = 0;
+  for (const e of events) {
+    const ids = e.t === 'strike' && e.attackerId === unit.id ? [e.targetId] : e.t === 'effectCast' ? e.effect.threatenedAtCast : [];
+    for (const id of ids) if (id !== unit.id) (unitById(state, id).side === unit.side ? allies : targeted).add(id);
+    if (e.t === 'strike' && e.attackerId === unit.id && (e.damage ?? 0) > 0) {
+      damage += e.damage!;
+      if (unitById(state, e.targetId).side !== unit.side) damaged.add(e.targetId);
+    }
+  }
+  const p = (tel.patterns[name] ??= { kind, weaponId, uses: 0, enemiesTargeted: 0, enemiesDamaged: 0, multiTargetUses: 0, multiHitUses: 0, mostEnemiesTargeted: 0, alliesTargeted: 0, damage: 0 });
+  p.uses += 1;
+  p.enemiesTargeted += targeted.size;
+  p.enemiesDamaged += damaged.size;
+  if (targeted.size >= 2) p.multiTargetUses += 1;
+  if (damaged.size >= 2) p.multiHitUses += 1;
+  p.mostEnemiesTargeted = Math.max(p.mostEnemiesTargeted, targeted.size);
+  p.alliesTargeted += allies.size;
+  p.damage += damage;
 }
 
 // ---------------- Skills ----------------
@@ -577,6 +649,7 @@ function doSkill(state: BattleState, unit: UnitState, skillId: string, target: V
   if (slot) slot.readyAt = readyAt;
   if (skill.consumesBolt) consumeBolt(unit);
   events.push({ t: 'attack', attackerId: unit.id, name: skill.name, tiles: tg.area ?? [target], apCost: cost, targetTile: target });
+  const first = events.length;
 
   const { profile, delay } = resolveSkill(state, unit, skill);
   const opts: StrikeOpts = { ...(skill.applies && { applies: skill.applies }) };
@@ -616,6 +689,26 @@ function doSkill(state: BattleState, unit: UnitState, skillId: string, target: V
       castEffect(state, unit, { name: skill.name, tiles: tg.area!, delay, damage: profile.damage, damageType: profile.damageType, pctPen: profile.pctPen, allowedReactions: profile.allowedReactions ?? [], ...(skill.applies && { applies: skill.applies }) }, events);
       break;
     }
+    case 'summon':
+      spawnUnits(state, unit, skill.summon!, tg.area!, events);
+      break;
+  }
+  recordPattern(state, unit, skill.name, 'skill', owned.instanceId ? unit.weaponId : null, events.slice(first));
+}
+
+/** Summoned units join the timeline `spec.delay` AP after the cast; they count toward victory like any enemy. */
+function spawnUnits(state: BattleState, source: UnitState, spec: NonNullable<SkillDef['summon']>, tiles: Vec[], events: GameEvent[]): void {
+  for (const tile of tiles) {
+    const kind = spec.variant && roll(state.rng, state.config.broodLargeRatChance).success ? spec.variant : spec;
+    const tpl = UNITS[kind.template]!;
+    state.seq += 1;
+    const id = `${source.id}-${kind.template}-${state.seq}`;
+    const n = state.units.filter((x) => x.templateId === kind.template).length + 1;
+    const u = buildUnit({ template: kind.template, at: { ...tile }, id, name: kind.name, initiative: round3(state.clock + spec.delay) }, state.units.length, tpl.level ?? 1, state.config);
+    u.glyph = `${tpl.glyph}${n}`;
+    state.units.push(u);
+    state.telemetry[id] = emptyTelemetry();
+    events.push({ t: 'spawn', unitId: id, sourceId: source.id, at: { ...tile } });
   }
 }
 
@@ -669,12 +762,17 @@ function resolveEffect(state: BattleState, eff: DelayedEffect, events: GameEvent
     const reaction = resolveReactions(state, eff.origin ?? source?.pos ?? u.pos, u, { allowedReactions: eff.allowedReactions ?? [] });
     if (reaction.displacedTo) events.push({ t: 'displace', unitId: u.id, from, to: reaction.displacedTo, reason: 'dodge' });
     const amount = reaction.avoided ? 0 : delayedDamage(state, eff, u);
-    if (!reaction.avoided) dealDamage(state, source, u, amount, events);
+    if (!reaction.avoided) dealDamage(state, source, u, amount, source ? `${source.name}: ${eff.name}` : eff.name);
     const chance = eff.escapeChances?.[u.id];
     const reason = chance === undefined ? 'late' : chance === 'couldEscape' ? 'stayed' : chance;
-    hits.push({ unitId: u.id, damage: amount, hpAfter: u.hp, ...reaction, ...(!reaction.avoided && { caught: { reason, nextTurnAt: u.nextTurnAt } }) });
+    const previewSafe = eff.endTurnPreviewSafe?.[u.id];
+    hits.push({ unitId: u.id, damage: amount, hpAfter: u.hp, ...reaction, ...(!reaction.avoided && { caught: { reason, nextTurnAt: u.nextTurnAt, ...(previewSafe !== undefined && { previewSafe }) } }) });
     const tel = state.telemetry[u.id];
-    if (tel && !reaction.avoided) tel.caught += 1;
+    if (tel && !reaction.avoided) {
+      tel.caught += 1;
+      tel.caughtBy[reason] += 1;
+      if (previewSafe) tel.caughtAfterSafePreview += 1;
+    }
   }
   const escaped = eff.threatenedAtCast.filter((id) => {
     const u = state.units.find((x) => x.id === id);

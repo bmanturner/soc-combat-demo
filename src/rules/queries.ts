@@ -6,7 +6,7 @@ import { SKILLS, WEAPONS } from '../content/gear';
 export { availableWeapons, availableSkills, attackModes, equippedWeapon, equippedItem, effectiveStats, weaponLockReason, normalizeSetup } from './equipment';
 export { dualWieldCandidates, colossalRingTiles } from './targeting';
 import { keepEngagedChance, totalAvoidance } from './formulas';
-import { actionApCost, reactionOptions, delayedDamage, effectCanHit, hypotheticalBoard, resolvedDamage, resolveSkill, schedulerCompare, turnDelay, unitActsBefore, unitSchedule } from './resolvers';
+import { actionApCost, reactionOptions, delayedDamage, effectCanHit, hypotheticalBoard, resolvedDamage, resolveSkill, schedulerCompare, turnDelay, unitActsBefore, unitMinDelay, unitSchedule } from './resolvers';
 import { DIRS8, add, eq, key, type Vec } from './geometry';
 import { patternDirections } from './patterns';
 import { basicAttackHits, ringPenalty, skillTargeting, sweepTiles } from './targeting';
@@ -204,11 +204,11 @@ export function previewReload(state: BattleState, u: UnitState): EquipmentPrevie
   const slot = reloadSlot(u, state.config), item = u.carried[slot];
   const reason = reloadReason(state, u);
   const apCost = actionApCost(state, u, { apCost: item ? WEAPONS[item.defId]!.reloadAp ?? 0 : 0 });
-  return { valid: !reason, reason, apCost, nextTurnIn: projectedNextTurn(state, apCost), slot, instanceId: item?.instanceId ?? null };
+  return { valid: !reason, reason, apCost, nextTurnIn: projectedNextTurn(state, apCost, true), slot, instanceId: item?.instanceId ?? null };
 }
 export function previewSwap(state: BattleState, u: UnitState, slot: 0 | 1): EquipmentPreview {
   const reason = swapReason(state, u, slot), apCost = actionApCost(state, u, { apCost: state.config.weaponSwapAp });
-  return { valid: !reason, reason, apCost, nextTurnIn: projectedNextTurn(state, apCost), slot, instanceId: u.carried[slot]?.instanceId ?? null };
+  return { valid: !reason, reason, apCost, nextTurnIn: projectedNextTurn(state, apCost, true), slot, instanceId: u.carried[slot]?.instanceId ?? null };
 }
 
 export function skillCost(state: BattleState, u: UnitState, skill: SkillDef): number {
@@ -217,7 +217,7 @@ export function skillCost(state: BattleState, u: UnitState, skill: SkillDef): nu
 
 export function previewSkill(state: BattleState, u: UnitState, skillId: string, anchor: Vec, from: Vec = u.pos): AttackPreview | null {
   const skill = SKILLS[skillId];
-  if (!skill || skillUseReason(state, u, skillId)) return null;
+  if (!skill || skill.kind === 'summon' || skillUseReason(state, u, skillId)) return null;
   const hypotheticalMove = !eq(u.pos, from);
   state = hypotheticalBoard(state, u, from);
   u = unitById(state, u.id);
@@ -248,7 +248,7 @@ export function skillOptions(state: BattleState, u: UnitState, skillId: string, 
   const skill = SKILLS[skillId];
   if (!skill || !skillReady(state, u, skillId)) return [];
   const out: AttackPreview[] = [];
-  if (skill.kind === 'sigil' || skill.kind === 'sweep') return out; // free-aim; previewed on hover
+  if (skill.kind === 'sigil' || skill.kind === 'sweep' || skill.kind === 'summon') return out; // free-aim or self-cast; not an attack option
   for (const e of state.units) {
     if (!alive(e) || e.side === u.side) continue;
     for (const t of tilesOf(e)) {
@@ -288,12 +288,20 @@ export function timelineEntries(state: BattleState): TimelineEntry[] {
   return out.sort((a, b) => Number(b.active) - Number(a.active) || schedulerCompare(state.config, scheduled(a), scheduled(b)));
 }
 
-/** Where the active unit's next turn would land after spending `extra` more AP. */
-export function projectedNextTurn(state: BattleState, extra: number): number {
+/** Where the active unit's next turn would land after spending `extra` more AP. `withAction` marks a previewed attack, skill, reload or swap, which waives the no-action surcharge. */
+export function projectedNextTurn(state: BattleState, extra: number, withAction = false): number {
   const a = state.active;
   if (!a) return 0;
   const spent = a.moveSpent + a.actionSpent + a.reactionSpent + extra;
-  return a.startedAt - state.clock + turnDelay(state, unitById(state, a.unitId), spent);
+  return a.startedAt - state.clock + turnDelay(state, unitById(state, a.unitId), spent, a.acted || withAction);
+}
+
+/** AP the active unit would add by ending its turn now without having acted (0 for massive units or after any action). */
+export function noActionSurcharge(state: BattleState): number {
+  const a = state.active;
+  const u = a && unitById(state, a.unitId);
+  if (!a || !u || a.acted || u.massive) return 0;
+  return unitMinDelay(state, u);
 }
 
 export interface Danger {

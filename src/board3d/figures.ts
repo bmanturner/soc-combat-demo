@@ -14,7 +14,9 @@ export function makeFigure(u: UnitState): Figure | null {
   const look = LOOKS[u.templateId];
   if (look) return new Humanoid(u, look);
   if (u.templateId === 'wolf') return new Beast(u, wolfSpec(u.name));
-  if (u.templateId === 'small_rat') return new Beast(u, ratSpec(u.id));
+  if (u.templateId === 'small_rat' || u.templateId === 'brood_rat') return new Beast(u, ratSpec(u.id));
+  if (u.templateId === 'large_rat') return new Beast(u, largeRatSpec(u.id));
+  if (u.templateId === 'rat_brood_mother') return new Beast(u, broodSpec(u.id));
   if (u.templateId === 'nephilim') return new Giant(u);
   return null;
 }
@@ -38,6 +40,8 @@ type PropKind = WeaponFamily | 'club' | 'khopesh';
 function propKind(weaponId: string): PropKind {
   if (weaponId === 'shepherds_club') return 'club';
   if (weaponId === 'cultist_blade') return 'khopesh';
+  if (weaponId === 'bandit_blade') return 'shield';
+  if (weaponId === 'bandit_bow') return 'bow';
   return WEAPONS[weaponId]?.family ?? 'natural';
 }
 
@@ -323,6 +327,9 @@ const LOOKS: Record<string, Look> = {
   cultist_fighter: { robe: '#3a332e', tunic: '#2e2824', skin: '#a6714d', hair: '#1b1410', build: 1.1, scale: 1.02, head: { kind: 'hood', color: '#332d29' } },
   // Cultist Seer: black hood, ash-white paint across the eyes.
   cultist_mage: { robe: '#352f2a', tunic: '#2a2521', skin: '#a6714d', hair: '#1b1410', build: 0.92, scale: 1.03, head: { kind: 'hood', color: '#2c2723' }, facePaint: '#ddd6c8' },
+  // Bandits: demo looks (wiki silent on costume).
+  bandit_fighter: { robe: '#6b5a44', tunic: '#4f3f2e', skin: '#a8724c', hair: '#2e2118', build: 1.1, scale: 1.02, head: { kind: 'wrap', color: '#7a5a3a' }, beard: '#2e2118' },
+  bandit_archer: { robe: '#6f6248', tunic: '#53432f', skin: '#b07a52', hair: '#3a2a1c', build: 0.95, scale: 1, head: { kind: 'hood', color: '#5a4a34' }, quiver: true },
 };
 
 /**
@@ -830,6 +837,16 @@ function ratSpec(id: string): BeastSpec {
     coat: v > 0.5 ? '#6e6152' : '#5f5446', belly: '#a8987c', muzzle: '#5a4e42', skin: '#b58d7c', scale: 0.95 + 0.13 * v, girth: 1, torsoY: 0.115, torsoLen: 0.2, chest: 0.07, haunch: 0.085,
     egg: true, headR: 0.05, snout: 0.075, ear: { kind: 'round', r: 0.03 }, tornEar: false, scar: false, teeth: 'incisors', tail: { r: 0.012, len: 0.3, droop: -0.2 }, headLow: 0.05, height: 0.21,
   };
+}
+
+/** Large rat: bigger and darker than a granary rat, well short of the brood mother (demo look). */
+function largeRatSpec(id: string): BeastSpec {
+  return { ...ratSpec(id), coat: '#54493c', scale: 1.3, girth: 1.12, tornEar: true };
+}
+
+/** Brood mother: a scarred, much larger rat (demo look). */
+function broodSpec(id: string): BeastSpec {
+  return { ...ratSpec(id), coat: '#4e4338', belly: '#8f7f66', muzzle: '#463b31', scale: 1.7, girth: 1.25, tornEar: true, scar: true, tail: { r: 0.016, len: 0.34, droop: -0.25 } };
 }
 
 class Beast extends Rig {

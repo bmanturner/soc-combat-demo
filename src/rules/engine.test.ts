@@ -92,17 +92,23 @@ describe('Boss telegraph escapes (proposal §9 table: boss acts in 30, sweep lan
 });
 
 describe('Timeline', () => {
-  it('next turn = AP spent; waiting costs the minimum delay', () => {
+  it('next turn = AP spent, plus the no-action surcharge when the turn took no action', () => {
     let s = testBattle({ rows: OPEN_7x7, jubal: { x: 0, y: 0 }, enemies: [{ template: 'small_rat', at: { x: 6, y: 6 }, initiative: 500 }] });
     s = play(s, [{ type: 'endTurn', unitId: 'jubal' }]).state;
     expect(unitById(s, 'jubal').nextTurnAt).toBe(25);
     expect(s.clock).toBe(25);
     s = play(s, [{ type: 'move', unitId: 'jubal', to: { x: 3, y: 0 } }, { type: 'endTurn', unitId: 'jubal' }]).state;
-    expect(unitById(s, 'jubal').nextTurnAt).toBe(55);
+    expect(unitById(s, 'jubal').nextTurnAt).toBe(25 + 30 + 25);
   });
   it('the unit with the lowest AP acts next; ties go to the party', () => {
     const s = testBattle({ rows: OPEN_7x7, jubal: { x: 0, y: 0 }, enemies: [{ template: 'small_rat', at: { x: 6, y: 6 }, initiative: 0 }] });
     expect(s.active?.unitId).toBe('jubal');
+  });
+  it('numbers glyphs of units that share a template, in placement order', () => {
+    const s = testBattle({ rows: OPEN_7x7, jubal: { x: 0, y: 0 }, enemies: [
+      { template: 'wolf', at: { x: 6, y: 0 }, id: 'w1' }, { template: 'wolf', at: { x: 6, y: 2 }, id: 'w2' },
+      { template: 'wolf', at: { x: 6, y: 4 }, id: 'w3' }, { template: 'small_rat', at: { x: 4, y: 6 }, id: 'r' }] });
+    expect(s.units.map((u) => u.glyph)).toEqual(['J', 'W1', 'W2', 'W3', 'r']);
   });
 });
 

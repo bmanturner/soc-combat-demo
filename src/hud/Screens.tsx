@@ -7,7 +7,7 @@ import { controller } from '../game/controller';
 import { showToast, store } from '../game/store';
 import { useState } from 'react';
 import { useGame, useModal } from './hooks';
-import { battleShareUrl } from '../game/share';
+import { fightReport, fightSummary } from '../game/report';
 
 import { availableWeapons, weaponLockReason } from '../rules/equipment';
 import { WeaponDetails } from './WeaponDetails';
@@ -114,33 +114,6 @@ export function Setup() {
   );
 }
 
-
-export function report(b: BattleState): string {
-  const enc = encounterById(b.encounterId);
-  const jubal = b.units.find((u) => u.id === 'jubal');
-  const diff = diffFromDefaults(b.config);
-  const rows = b.units
-    .filter((u) => u.side === 'player')
-    .map((u) => {
-      const t = b.telemetry[u.id]!;
-      return `| ${u.name} | ${u.ko ? 'down' : `${u.hp}/${u.maxHp}`} | ${t.turns} | ${Math.round(t.moveAp)} | ${Math.round(t.actionAp)} | ${Math.round(t.waitAp)} | ${t.damageDealt} | ${t.damageTaken} | ${t.escapes} | ${t.caught} | ${t.disengageFails}/${t.disengageAttempts} |`;
-    });
-  return [
-    `## ${enc.name}: ${b.outcome.toUpperCase()} at ${Math.round(b.clock)} AP`,
-    `Jubal: ${b.setup.weaponIds.filter(Boolean).map(id => WEAPONS[id!]?.name ?? '?').join(' / ')} + ${ARMOR[jubal?.armorClass ?? 'light'].name} · starting slot ${(b.setup.equippedSlot ?? 0) + 1} · seed ${b.seed}`,
-    ...b.units.filter(u => u.side === 'player').map(u => `${u.name}: reloads ${b.telemetry[u.id]!.reloads}, swaps ${b.telemetry[u.id]!.swaps}`),
-    '',
-    '| Unit | HP | Turns | Move AP | Action AP | Wait AP | Dealt | Taken | Escaped | Caught | Held/tries |',
-    '|---|---|---|---|---|---|---|---|---|---|---|',
-    ...rows,
-    '',
-    Object.keys(diff).length ? `Changed settings: ${Object.entries(diff).map(([k, v]) => `${k}=${String(v)}`).join(', ')}` : 'Settings: all defaults',
-    `Try the same setup and seed (encounter, loadout and rules; not an action replay): ${battleShareUrl(b)}`,
-    '',
-    'Notes:',
-  ].join('\n');
-}
-
 export function ResultOverlay() {
   const battle = useGame((s) => s.battle);
   const busy = useGame((s) => s.busy);
@@ -193,17 +166,32 @@ export function ResultOverlay() {
         <div className="btn-row">
           <button
             onClick={() => {
-              void navigator.clipboard.writeText(report(battle)).then(() => showToast('Report copied: paste it to Brendan'));
+              void navigator.clipboard.writeText(fightReport(battle)).then(() => showToast('Report copied: paste it to Brendan'));
             }}
             data-testid="copy-report"
           >
             Copy report
+          </button>
+          <button onClick={() => downloadSummary(battle)} data-testid="download-summary">
+            Download JSON
           </button>
           <button onClick={() => setDismissed(generation)}>Look at the board</button>
         </div>
       </div>
     </div>
   );
+}
+
+/** Save the fight's JSON summary as a file named for the encounter, outcome and seed. */
+function downloadSummary(battle: BattleState): void {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(fightSummary(battle), null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `soc-${battle.encounterId}-${battle.outcome}-seed${battle.seed}-${Math.round(battle.clock)}ap.json`;
+  a.click();
+  // Revoke after the click has handed the blob to the download.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  showToast('Fight summary saved');
 }
 
 const STATUS_LABEL = { source: "Aaron's rule", tentative: 'Tentative math', demo: 'Demo default' } as const;
@@ -329,7 +317,7 @@ export function HelpOverlay() {
           <li><b>Engagement.</b> Walking away from an adjacent melee enemy can get you held: you move one tile and stop, and they may get a free swing. The path preview shows the odds.</li>
           <li><b>Flanked.</b> Enemies on opposite sides (N/S or E/W{cfg.flankDiagonals ? ', and diagonal pairs' : ''}) strip your engagement, multiply your reactions by {Math.round(cfg.flankReactionMult * 100)}% and make you take +{Math.round(cfg.flankDamageTaken * 100)}% damage. It works on them too.</li>
           <li><b>Telegraphs.</b> Red tiles land after a delay. Escape requires a turn before impact (or a tie when units act first), enough movement and a reachable safe tile. Engagement can still hold you.</li>
-          <li><b>Wait</b> on an empty turn costs {cfg.minTurnDelay} AP: a cheap way to slip behind an enemy's turn.</li>
+          <li><b>No action, +{cfg.noActionTurnAp} AP.</b> Ending a turn without an attack, skill, reload or swap adds {cfg.noActionTurnAp} AP on top of the movement spent (enemies too). A Wait in place costs just that.</li>
         </ul>
         <p className="muted">Keys: M move · A attack · T cycle mode · R reload · W swap · 1–9 skills · Space end turn · Esc / right-click cancel.</p>
         <p className="muted">3D board: drag to orbit, wheel to zoom, Reset view to re-frame. A drag never commits a move; click in place.</p>

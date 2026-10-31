@@ -14,7 +14,7 @@ web
 
 ## Product Purpose
 
-A browser combat sandbox for Sons of Cain's AP-timeline tactics. AP spent on a turn determines when that unit acts next; it is not a per-turn action budget. Movement has its own separate budget. The demo makes it possible to play the four encounters, swap loadouts, change rules live, and compare outcomes, so that unresolved design questions are answered by play rather than speculation.
+A browser combat sandbox for Sons of Cain's AP-timeline tactics. AP spent on a turn determines when that unit acts next; it is not a per-turn action budget. Movement has its own separate budget. The demo makes it possible to play the encounters, swap loadouts, change rules live, and compare outcomes, so that unresolved design questions are answered by play rather than speculation.
 
 Success: Aaron and playtesters can reach a confident judgment about a rule or number by playing it, and that judgment travels back as a reproducible setup plus telemetry.
 
@@ -32,7 +32,7 @@ A rules instrument that is honest about where every number comes from. Each weap
 
 ## Capabilities and Constraints
 
-- Four encounters: The Granary (tutorial), Road Wolves, The Ruined Shrine (cultists), The Trapped Nephilim (boss).
+- Seven encounters: The Granary (tutorial), The Rat Nest (brood mother), Road Wolves, Bandits on the Trail, The Ruined Shrine (cultists), Valley Road Bandits, The Trapped Nephilim (boss).
 - Nine weapon families with modes, two carried slots, paid swapping, reload/cooldown state, basic and proficiency skills.
 - Party: Jubal (player-chosen loadout) with companions Jabal and the Hired Archer; Tubal-Cain offers the weapon in setup.
 - Rules core is pure deterministic TypeScript (seeded RNG, no DOM). Golden and property tests are intended to serve as an executable spec for a future engine port.

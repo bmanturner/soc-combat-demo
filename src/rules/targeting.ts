@@ -1,9 +1,9 @@
 // Targeting: which units a basic attack or skill aimed at a tile would affect. Shared by engine, previews, AI.
 
 import { attackMode } from './equipment';
-import { add, cheb, dir, dirIndexOf, type Vec } from './geometry';
+import { add, cheb, dir, dirIndexOf, DIRS8, type Vec } from './geometry';
 import { aimDirection, patternTiles } from './patterns';
-import { distToUnit, lineOfSight, occupant, terrainAt, walkable } from './state';
+import { alive, distToUnit, enemiesOf, lineOfSight, occupant, terrainAt, walkable } from './state';
 import type { BattleState, SkillDef, UnitState } from './types';
 
 export interface PatternHit {
@@ -76,6 +76,16 @@ export function sweepTiles(state: BattleState): Vec[] {
   return out;
 }
 
+/** Open tiles around a summoner, nearest the enemy first (ties in DIRS8 order). Single-tile casters only. */
+export function summonTiles(state: BattleState, unit: UnitState): Vec[] {
+  const foes = enemiesOf(state, unit);
+  return DIRS8.map((d) => add(unit.pos, d))
+    .filter((p) => walkable(state, p) && !occupant(state, p))
+    .map((p) => ({ p, d: foes.length ? Math.min(...foes.map((f) => distToUnit(p, f))) : 0 }))
+    .sort((a, b) => a.d - b.d) // stable sort: ties keep DIRS8 order
+    .map((x) => x.p);
+}
+
 export interface SkillTargeting {
   valid: boolean;
   reason?: string;
@@ -123,6 +133,15 @@ export function skillTargeting(state: BattleState, unit: UnitState, skill: Skill
           const p = { x: target.x + dx, y: target.y + dy };
           if (terrainAt(state, p) === 'floor') area.push(p);
         }
+      return { valid: true, area };
+    }
+    case 'summon': {
+      const spec = skill.summon!;
+      const living = state.units.filter((x) => alive(x) && x.side === unit.side && (x.templateId === spec.template || x.templateId === spec.variant?.template)).length;
+      const room = Math.min(spec.count, state.config.broodMaxRats - living);
+      if (room <= 0) return { valid: false, reason: 'the brood is at full strength' };
+      const area = summonTiles(state, unit).slice(0, room);
+      if (area.length === 0) return { valid: false, reason: 'no open tile to summon onto' };
       return { valid: true, area };
     }
   }

@@ -2,7 +2,7 @@
 import type { BattleState, CaughtReason, GameEvent } from './types';
 
 /** Why a party member was caught, in the log's voice. */
-function caughtWhy(reason: CaughtReason, nextTurnAt: number, impactAt: number): string {
+export function caughtWhy(reason: CaughtReason, nextTurnAt: number, impactAt: number): string {
   switch (reason) {
     case 'late': return `next turn @${formatAp(nextTurnAt)} came after impact @${formatAp(impactAt)}`;
     case 'trapped': return 'no clear tile within reach on their turn';
@@ -52,6 +52,8 @@ export function describeEvent(state: BattleState, e: GameEvent): string | null {
       return `${n(e.unitId)} recovers`;
     case 'displace':
       return `${n(e.unitId)} is ${e.reason === 'push' ? 'shoved' : e.reason === 'pull' ? 'dragged' : 'moved'} to ${DIR(e.to)}`;
+    case 'spawn':
+      return `${n(e.sourceId)} calls ${n(e.unitId)} onto ${DIR(e.at)}`;
     case 'effectCast':
       return `⚠ ${e.effect.name} telegraphed on ${e.effect.tiles.length} tiles: lands in ${formatAp(e.effect.resolveAt - e.effect.castAt)} AP (@${formatAp(e.effect.resolveAt)})`;
     case 'effectResolve': {

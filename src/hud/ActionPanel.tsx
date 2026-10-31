@@ -2,7 +2,7 @@ import { UNITS } from '../content/units';
 import { Provenance } from './Guidance';
 import { Pattern } from './WeaponDetails';
 import { ARMOR, SKILLS, WEAPONS } from '../content/gear';
-import { basicAttackApCost, movementLeft, previewAttack } from '../rules/queries';
+import { basicAttackApCost, movementLeft, noActionSurcharge, previewAttack } from '../rules/queries';
 import { combatActionReason, attackModes } from '../rules/equipment';
 import { WeaponControls } from './WeaponControls';
 import { unitById } from '../rules/state';
@@ -36,6 +36,10 @@ export function UnitCard({ unit, battle, compact = false }: { unit: UnitState; b
           <span title="Armor reduces physical damage: ×100/(100+Armor)">Armor {unit.armor}</span>
           <span title="Magic Resist reduces magical damage">MR {unit.mr}</span>
           <span title="Movement AP per tile">{ap(unit.moveApPerTile)} AP/tile</span>
+          {/* Epsilon matches reachable(): 50 / (25/3) must count as 6 tiles, not 5.999… */}
+          <span title={`Tiles per turn within the ${ap(battle.config.movementBudget)} AP movement budget`} data-testid="uc-move">
+            {unit.immobile ? "Can't move" : `Moves ${Math.floor((battle.config.movementBudget + 1e-6) / unit.moveApPerTile)} tiles`}
+          </span>
           <span>Dodge {pct(unit.dodge)}</span>
           {unit.parry > 0 && <span>Parry {pct(unit.parry)}</span>}
           {unit.block > 0 && <span>Block {pct(unit.block)}</span>}
@@ -120,7 +124,7 @@ export function ActionPanel() {
           <WeaponControls battle={battle} unit={u} busy={busy} mode={mode} />
           {preview && <div data-testid="attack-preview" className="hint">Selected attack: {preview.apCost} AP{preview.cycleAp !== preview.apCost && ` · ${preview.cycleAp} AP including reload`}<div>{preview.note}</div>{preview.candidates?.map(c => <div key={c.unitId}>{unitById(battle,c.unitId).name}: {pct(c.probability)} selection · one random</div>)}</div>}
           <button className={`end-turn ${end?.danger ?? ''}`} onClick={() => void controller.endTurn()} disabled={busy} data-testid="end-turn" title={end?.text || 'End your turn'}>
-            {spent === 0 ? 'Wait' : 'End turn'} → next in {Math.round(end?.projected ?? 0)} AP <kbd>Space</kbd>
+            {spent === 0 ? 'Wait' : noActionSurcharge(battle) > 0 ? `End turn (+${noActionSurcharge(battle)} no action)` : 'End turn'} → next in {Math.round(end?.projected ?? 0)} AP <kbd>Space</kbd>
             {end?.danger === 'hit' && <div className="warn">No escape if you stop here</div>}
             {end?.danger === 'risk' && <div className="warn">Escape risk, check the timeline</div>}
           </button>

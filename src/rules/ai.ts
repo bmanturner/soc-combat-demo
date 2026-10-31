@@ -58,11 +58,11 @@ function nearestEnemy(state: BattleState, u: UnitState): UnitState | null {
   return best;
 }
 
-/** Projected delay if the active unit spends `extra` more AP. */
-function projected(state: BattleState, extra: number, u: UnitState): number {
+/** Projected delay if the active unit spends `extra` more AP; `withAction` marks plans that include an attack, skill, reload or swap. */
+function projected(state: BattleState, extra: number, u: UnitState, withAction: boolean): number {
   const a = state.active!;
   const spent = a.moveSpent + a.actionSpent + a.reactionSpent + extra;
-  return turnDelay(state, u, spent);
+  return turnDelay(state, u, spent, a.acted || withAction);
 }
 
 /** True if standing on `tile` until our next turn (in `delay` AP) gets us hit by a known or predictable effect. */
@@ -118,7 +118,7 @@ function optionsFrom(state: BattleState, u: UnitState, from: Vec, focus: UnitSta
   if (allowSkills) {
     for (const s of availableSkills(state, u)) {
       const def = SKILLS[s.id];
-      if (!def || def.special || def.kind === 'sigil' || !skillReady(state, u, s.id)) continue;
+      if (!def || def.special || def.kind === 'sigil' || def.kind === 'summon' || !skillReady(state, u, s.id)) continue;
       for (const p of skillOptions(state, u, s.id, from)) {
         let score = scoreAttack(state, p, u, focus);
         if (def.applies === 'dazed') score += p.targets.reduce((sum, t) => sum + (unitById(state, t.unitId).side !== u.side && !unitById(state, t.unitId).dazed ? 18 * t.landChance : 0), 0);
@@ -169,9 +169,9 @@ function meleeBrute(state: BattleState, u: UnitState, focus: UnitState | null): 
   if (u.feared) return a.moved ? END(u) : fleeAction(state, u);
   const target = focus ?? nearestEnemy(state, u);
   if (!target) return END(u);
-  const avoidAt = (p: Vec, extraAp: number) => tileDanger(state, u, p, projected(state, extraAp, u), false);
+  const avoidAt = (p: Vec, extraAp: number, withAction: boolean) => tileDanger(state, u, p, projected(state, extraAp, u, withAction), false);
   if (!a.acted) {
-    const here = optionsFrom(state, u, u.pos, target, true).filter((o) => avoidAt(u.pos, o.preview.apCost) === 0);
+    const here = optionsFrom(state, u, u.pos, target, true).filter((o) => avoidAt(u.pos, o.preview.apCost, true) === 0);
     const bestHere = here.sort((x, y) => y.score - x.score)[0];
     if (!a.moved && !a.movementLocked) {
       const reach = reachable(state, u.id);
@@ -180,7 +180,7 @@ function meleeBrute(state: BattleState, u: UnitState, focus: UnitState | null): 
         const p = r.path[r.path.length - 1]!;
         if (eq(p, u.pos)) continue;
         for (const o of optionsFrom(state, u, p, target, true)) {
-          if (avoidAt(p, r.cost + o.preview.apCost) > 0) continue;
+          if (avoidAt(p, r.cost + o.preview.apCost, true) > 0) continue;
           const value = o.score - r.cost * 0.02;
           if (!bestMove || value > bestMove.value) bestMove = { to: p, opt: o, value };
         }
@@ -189,16 +189,16 @@ function meleeBrute(state: BattleState, u: UnitState, focus: UnitState | null): 
     }
     if (bestHere && bestHere.score > 0) return toAction(u, bestHere);
     if (!a.movementLocked && state.config.movementBudget - a.moveSpent >= u.moveApPerTile) {
-      return approach(state, u, target, reachable(state, u.id), (p, c) => avoidAt(p, c));
+      return approach(state, u, target, reachable(state, u.id), (p, c) => avoidAt(p, c, false));
     }
     return END(u);
   }
   // After acting: step out of anything about to land on us.
-  if (!a.movementLocked && avoidAt(u.pos, 0) > 0) {
+  if (!a.movementLocked && avoidAt(u.pos, 0, false) > 0) {
     const reach = reachable(state, u.id);
     for (const r of [...reach.values()].sort((x, y) => x.cost - y.cost)) {
       const p = r.path[r.path.length - 1]!;
-      if (avoidAt(p, r.cost) === 0) return { type: 'move', unitId: u.id, to: p };
+      if (avoidAt(p, r.cost, false) === 0) return { type: 'move', unitId: u.id, to: p };
     }
   }
   return END(u);
@@ -219,7 +219,7 @@ function guardianAction(state: BattleState, u: UnitState): Action {
   // Fight intruders near the caster, but do not abandon the screen to chase a distant bait.
   const action = meleeBrute(state, u, focus);
   if (action.type === 'attack' || action.type === 'skill') return action;
-  if (action.type === 'move' && tileDanger(state, u, u.pos, projected(state, 0, u), false) > 0) return action;
+  if (action.type === 'move' && tileDanger(state, u, u.pos, projected(state, 0, u, false), false) > 0) return action;
   if (state.active!.movementLocked || state.active!.moved) return END(u);
   const goals: Vec[] = [];
   for (let y = seer.pos.y - 3; y <= seer.pos.y + 3; y++) for (let x = seer.pos.x - 3; x <= seer.pos.x + 3; x++) {
@@ -236,7 +236,7 @@ function guardianAction(state: BattleState, u: UnitState): Action {
   let best: { p: Vec; value: number } | null = null;
   for (const r of reachable(state, u.id).values()) {
     const p = r.path[r.path.length - 1]!;
-    const value = (field.get(key(p)) ?? 999) + tileDanger(state, u, p, projected(state, r.cost, u), false) + r.cost * 0.001;
+    const value = (field.get(key(p)) ?? 999) + tileDanger(state, u, p, projected(state, r.cost, u, false), false) + r.cost * 0.001;
     if (!best || value < best.value) best = { p, value };
   }
   return best && !eq(best.p, u.pos) ? { type: 'move', unitId: u.id, to: best.p } : END(u);
@@ -247,7 +247,7 @@ function casterAction(state: BattleState, u: UnitState): Action {
   const foes = state.units.filter((x) => alive(x) && x.side !== u.side);
   if (foes.length === 0) return END(u);
   const nearestDist = (p: Vec) => Math.min(...foes.map((f) => distToUnit(p, f)));
-  const avoidAt = (p: Vec, extraAp: number) => tileDanger(state, u, p, projected(state, extraAp, u), false);
+  const avoidAt = (p: Vec, extraAp: number, withAction: boolean) => tileDanger(state, u, p, projected(state, extraAp, u, withAction), false);
   if (!a.acted) {
     // Brand the floor where it catches the most of them and the fewest of us.
     if (skillReady(state, u, 'hellfire_sigil') && u.skills.some((s) => s.id === 'hellfire_sigil')) {
@@ -287,47 +287,110 @@ function casterAction(state: BattleState, u: UnitState): Action {
           const p = r.path[r.path.length - 1]!;
           const canShoot = foes.some((f) => previewSkill(state, u, 'daze_bolt', f.pos, p));
           if (!canShoot) continue;
-          const v = nearestDist(p) * 2 - r.cost * 0.02 - avoidAt(p, r.cost + 100);
+          const v = nearestDist(p) * 2 - r.cost * 0.02 - avoidAt(p, r.cost + 100, true);
           if (!best || v > best.v) best = { p, v };
         }
         if (best && !eq(best.p, u.pos)) return { type: 'move', unitId: u.id, to: best.p };
       }
     }
   }
-  // No one-turn shot: route around terrain toward any legal firing tile. The goal set and
-  // deterministic BFS tie order remain stable across turns; do not chase Euclidean distance.
   if (!a.acted && !a.moved && !a.movementLocked && skillReady(state, u, 'daze_bolt')) {
-    const goals: Vec[] = [];
-    for (let y = 0; y < state.map.height; y++) for (let x = 0; x < state.map.width; x++) {
-      const p = { x, y };
-      if (walkable(state, p) && !occupant(state, p) && foes.some((f) => previewSkill(state, u, 'daze_bolt', f.pos, p))) goals.push(p);
-    }
-    const field = distanceField(state, goals);
-    const here = field.get(key(u.pos)) ?? Infinity;
-    let best: { p: Vec; value: number } | null = null;
-    for (const r of reachable(state, u.id).values()) {
-      const p = r.path[r.path.length - 1]!;
-      const value = (field.get(key(p)) ?? Infinity) + avoidAt(p, r.cost) / 25;
-      if (value < here && (!best || value < best.value)) best = { p, value };
-    }
-    if (best) return { type: 'move', unitId: u.id, to: best.p };
+    const route = routeToFiringTile(state, u, (p) => foes.some((f) => previewSkill(state, u, 'daze_bolt', f.pos, p)), (p, c) => avoidAt(p, c, false));
+    if (route) return route;
   }
-  // Keep distance 3+ from the nearest foe, preferring safety.
-  if (!a.movementLocked && state.config.movementBudget - a.moveSpent >= u.moveApPerTile && nearestDist(u.pos) <= 2) {
-    const reach = reachable(state, u.id);
-    let best: { p: Vec; v: number } | null = null;
-    for (const r of reach.values()) {
-      const p = r.path[r.path.length - 1]!;
-      const v = Math.min(nearestDist(p), 4) * 10 - r.cost * 0.05 - avoidAt(p, r.cost);
-      if (!best || v > best.v) best = { p, v };
-    }
-    if (best && !eq(best.p, u.pos)) return { type: 'move', unitId: u.id, to: best.p };
-  }
+  const retreat = keepDistance(state, u, nearestDist, (p, c) => avoidAt(p, c, false));
+  if (retreat) return retreat;
   if (!a.acted) {
     const staff = optionsFrom(state, u, u.pos, null, false).sort((x, y) => y.score - x.score)[0];
     if (staff) return toAction(u, staff);
   }
   return END(u);
+}
+
+/** No one-turn shot: route around terrain toward any open tile `canFireFrom` accepts. The goal set and
+ *  deterministic BFS tie order remain stable across turns; do not chase Euclidean distance. */
+function routeToFiringTile(state: BattleState, u: UnitState, canFireFrom: (p: Vec) => boolean, avoidAt: (p: Vec, extraAp: number) => number): Action | null {
+  const goals: Vec[] = [];
+  for (let y = 0; y < state.map.height; y++) for (let x = 0; x < state.map.width; x++) {
+    const p = { x, y };
+    if (walkable(state, p) && !occupant(state, p) && canFireFrom(p)) goals.push(p);
+  }
+  const field = distanceField(state, goals);
+  const here = field.get(key(u.pos)) ?? Infinity;
+  let best: { p: Vec; value: number } | null = null;
+  for (const r of reachable(state, u.id).values()) {
+    const p = r.path[r.path.length - 1]!;
+    const value = (field.get(key(p)) ?? Infinity) + avoidAt(p, r.cost) / 25;
+    if (value < here && (!best || value < best.value)) best = { p, value };
+  }
+  return best ? { type: 'move', unitId: u.id, to: best.p } : null;
+}
+
+/** Keep distance 3+ from the nearest foe, preferring safety. */
+function keepDistance(state: BattleState, u: UnitState, nearestDist: (p: Vec) => number, avoidAt: (p: Vec, extraAp: number) => number): Action | null {
+  const a = state.active!;
+  if (a.movementLocked || state.config.movementBudget - a.moveSpent < u.moveApPerTile || nearestDist(u.pos) > 2) return null;
+  let best: { p: Vec; v: number } | null = null;
+  for (const r of reachable(state, u.id).values()) {
+    const p = r.path[r.path.length - 1]!;
+    const v = Math.min(nearestDist(p), 4) * 10 - r.cost * 0.05 - avoidAt(p, r.cost);
+    if (!best || v > best.v) best = { p, v };
+  }
+  return best && !eq(best.p, u.pos) ? { type: 'move', unitId: u.id, to: best.p } : null;
+}
+
+/** Bandit archer: shoot from range; out of melee or sight, move to a tile with a shot. */
+function skirmisherAction(state: BattleState, u: UnitState): Action {
+  const a = state.active!;
+  const foes = state.units.filter((x) => alive(x) && x.side !== u.side);
+  if (foes.length === 0 || a.acted) return END(u);
+  const nearestDist = (p: Vec) => Math.min(...foes.map((f) => distToUnit(p, f)));
+  const avoidAt = (p: Vec, extraAp: number, withAction: boolean) => tileDanger(state, u, p, projected(state, extraAp, u, withAction), false);
+  const bestShot = (from: Vec) => optionsFrom(state, u, from, null, false).sort((x, y) => y.score - x.score)[0];
+  const here = bestShot(u.pos);
+  if (here && nearestDist(u.pos) >= 2) return toAction(u, here);
+  const canMove = !a.moved && !a.movementLocked;
+  if (canMove) {
+    let best: { p: Vec; v: number } | null = null;
+    for (const r of reachable(state, u.id).values()) {
+      const p = r.path[r.path.length - 1]!;
+      if (eq(p, u.pos) || nearestDist(p) < 2) continue;
+      const shot = bestShot(p);
+      if (!shot) continue;
+      const v = shot.score + Math.min(nearestDist(p), 4) * 5 - r.cost * 0.02 - avoidAt(p, r.cost + shot.preview.apCost, true);
+      if (!best || v > best.v) best = { p, v };
+    }
+    if (best) return { type: 'move', unitId: u.id, to: best.p };
+  }
+  // Pinned in melee with nowhere better to stand: shoot anyway.
+  if (here) return toAction(u, here);
+  if (canMove) {
+    const [lo, hi] = u.attack.range ?? [2, 10];
+    const route = routeToFiringTile(state, u, (p) => foes.some((f) => {
+      const d = distToUnit(p, f);
+      return d >= lo && d <= hi && lineOfSight(state, p, f.pos);
+    }), (p, c) => avoidAt(p, c, false));
+    if (route) return route;
+  }
+  return END(u);
+}
+
+/** Brood mother: call the brood whenever she can, bite what reaches her, and otherwise keep her distance. */
+function broodAction(state: BattleState, u: UnitState): Action {
+  const a = state.active!;
+  const foes = state.units.filter((x) => alive(x) && x.side !== u.side);
+  if (foes.length === 0) return END(u);
+  if (!a.acted) {
+    for (const s of u.skills) {
+      const def = SKILLS[s.id];
+      if (def?.kind === 'summon' && skillReady(state, u, s.id) && skillTargeting(state, u, def, u.pos).valid) return { type: 'skill', unitId: u.id, skillId: s.id, target: u.pos };
+    }
+    const bite = optionsFrom(state, u, u.pos, null, false).sort((x, y) => y.score - x.score)[0];
+    if (bite) return toAction(u, bite);
+  }
+  const nearestDist = (p: Vec) => Math.min(...foes.map((f) => distToUnit(p, f)));
+  const avoidAt = (p: Vec, extraAp: number, withAction: boolean) => tileDanger(state, u, p, projected(state, extraAp, u, withAction), false);
+  return keepDistance(state, u, nearestDist, (p, c) => avoidAt(p, c, false)) ?? END(u);
 }
 
 function nephilimAction(state: BattleState, u: UnitState): Action {
@@ -371,6 +434,10 @@ export function enemyAction(state: BattleState): Action {
       return nephilimAction(state, u);
     case 'caster':
       return casterAction(state, u);
+    case 'skirmisher':
+      return skirmisherAction(state, u);
+    case 'brood':
+      return broodAction(state, u);
     case 'guardian':
       return guardianAction(state, u);
     case 'swarm':
@@ -468,12 +535,12 @@ export function botAction(state: BattleState, policy: PartyPolicy = 'expert'): A
 
   if (a.acted) {
     // Already acted: pick the safest reachable tile, closest to staying put.
-    const delay = projected(state, 0, u);
+    const delay = projected(state, 0, u, false);
     if (danger(u.pos, delay) === 0 || a.movementLocked) return END(u);
     let best: { p: Vec; v: number } | null = null;
     for (const r of reachable(state, u.id).values()) {
       const p = r.path[r.path.length - 1]!;
-      const delay = projected(state, r.cost + (r.cost > 0 && a.surchargePending && !a.surchargePaid ? state.config.bowMoveSurcharge : 0), u);
+      const delay = projected(state, r.cost + (r.cost > 0 && a.surchargePending && !a.surchargePaid ? state.config.bowMoveSurcharge : 0), u, false);
       const v = -(danger(p, delay) * pathSafety(r) + pathFailureCost(state, r, (tile) => danger(tile, delay))) * 10 - r.cost;
       if (!best || v > best.v) best = { p, v };
     }
@@ -496,7 +563,7 @@ export function botAction(state: BattleState, policy: PartyPolicy = 'expert'): A
         const q = rr.path[rr.path.length - 1]!;
         if (!eq(q, p) && occupant(state, q) && occupant(state, q)!.id !== u.id) continue;
         const cost = plannedActionAp(state, u, o.skillId, r.cost + rr.cost > 0, o.preview.modeId);
-        const delay = turnDelay(state, u, spentNow + r.cost + cost + rr.cost);
+        const delay = turnDelay(state, u, spentNow + r.cost + cost + rr.cost, true);
         const risk = pathFailureCost(state, rr, (tile) => danger(tile, delay));
         const approachRisk = pathFailureCost(state, r, (tile) => danger(tile, delay));
         const expectedDanger = danger(q, delay) * pathSafety(rr) + risk + approachRisk;
@@ -523,25 +590,25 @@ export function botAction(state: BattleState, policy: PartyPolicy = 'expert'): A
     let best: { p: Vec; v: number } | null = null;
     for (const r of reach.values()) {
       const p = r.path[r.path.length - 1]!;
-      const delay = projected(state, r.cost, u);
+      const delay = projected(state, r.cost, u, false);
       const v = -danger(p, delay) * 3 - r.cost * 0.05 - Math.abs(cheb(p, focus.pos) - 6);
       if (!best || v > best.v) best = { p, v };
     }
     return best && !eq(best.p, u.pos) ? { type: 'move', unitId: u.id, to: best.p } : END(u);
   }
-  const dangerNow = danger(u.pos, projected(state, 0, u));
+  const dangerNow = danger(u.pos, projected(state, 0, u, false));
   if (dangerNow > 0) {
     // Standing in something: get out first, closer to the focus if possible.
     const field = distanceField(state, meleeGoals(state, focus));
     let best: { p: Vec; v: number } | null = null;
     for (const r of reach.values()) {
       const p = r.path[r.path.length - 1]!;
-      const v = -danger(p, projected(state, r.cost, u)) * 10 - (field.get(key(p)) ?? 50) - r.cost * 0.01;
+      const v = -danger(p, projected(state, r.cost, u, false)) * 10 - (field.get(key(p)) ?? 50) - r.cost * 0.01;
       if (!best || v > best.v) best = { p, v };
     }
     if (best && !eq(best.p, u.pos)) return { type: 'move', unitId: u.id, to: best.p };
   }
-  const act = approach(state, u, focus, reach, (p, c) => danger(p, projected(state, c, u)) * 3);
-  if (act.type === 'move' && danger(act.to, projected(state, reach.get(key(act.to))?.cost ?? 0, u)) > dangerNow) return END(u);
+  const act = approach(state, u, focus, reach, (p, c) => danger(p, projected(state, c, u, false)) * 3);
+  if (act.type === 'move' && danger(act.to, projected(state, reach.get(key(act.to))?.cost ?? 0, u, false)) > dangerNow) return END(u);
   return act;
 }

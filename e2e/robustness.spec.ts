@@ -65,7 +65,7 @@ test('U-09 copying draft changes neither fight, settings nor URL', async ({ page
 
 test('U-13 Help uses active rules and setup movement uses floor', async ({ page }) => {
   await page.goto('/#e=wolves');
-  await page.evaluate(() => window.__soc.controller.applyConfig({ ...window.__soc.store.getState().config, movementBudget: 80, minTurnDelay: 40, flankDamageTaken: 0.4, flankReactionMult: 0.7 }, false));
+  await page.evaluate(() => window.__soc.controller.applyConfig({ ...window.__soc.store.getState().config, movementBudget: 80, noActionTurnAp: 40, flankDamageTaken: 0.4, flankReactionMult: 0.7 }, false));
   await expect(page.getByTestId('armor-heavy')).toContainText('5 tiles');
   await page.getByTestId('start').click();
   await page.getByRole('button', { name: '?', exact: true }).click();

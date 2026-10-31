@@ -11,6 +11,7 @@ export type BoardViewKind = '2d' | '3d';
 export type SheetTab = 'actions' | 'intel';
 
 export const BOARD_VIEW_KEY = 'soc.boardView';
+export const BOARD_OUTLINES_KEY = 'soc.boardOutlines';
 /** Devices whose primary input cannot hover (phones, tablets): UI copy says "tap" instead of "click/hover". */
 export const TOUCH_UI_QUERY = '(hover: none) and (pointer: coarse)';
 export const TELEGRAPH_GUIDE_KEY = 'soc.guide.telegraph';
@@ -63,6 +64,8 @@ export interface GameStore {
   battleGeneration: number;
   /** Board renderer: Phaser 2D or three.js 3D. Presentation only; not part of share links. */
   boardView: BoardViewKind;
+  /** 3D board: team-colour outlines around figures. Presentation only; not in share links. */
+  boardOutlines: boolean;
   /** The first-telegraph guide was finished or skipped in this browser; Help can replay it. */
   telegraphGuideDone: boolean;
   /** Which battle panel the compact (phone) layouts show. Presentation only. */
@@ -96,6 +99,7 @@ export const store = createStore<GameStore>(() => ({
   boardVersion: 0,
   battleGeneration: 0,
   boardView: saved(BOARD_VIEW_KEY) === '3d' ? '3d' : '2d',
+  boardOutlines: saved(BOARD_OUTLINES_KEY) === 'on',
   telegraphGuideDone: saved(TELEGRAPH_GUIDE_KEY) === 'done',
   sheetTab: 'actions',
   sheetOpen: false,

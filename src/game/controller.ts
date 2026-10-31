@@ -12,7 +12,7 @@ import { occupant, unitById } from '../rules/state';
 import type { Action, BattleState, GameEvent } from '../rules/types';
 import { shareUrl } from './share';
 import { attackFailureReason } from './attack-reason';
-import { BOARD_VIEW_KEY, TELEGRAPH_GUIDE_KEY, showToast, store, type ActionHover, type BoardViewKind, type LogLine, type Mode } from './store';
+import { BOARD_OUTLINES_KEY, BOARD_VIEW_KEY, TELEGRAPH_GUIDE_KEY, showToast, store, type ActionHover, type BoardViewKind, type LogLine, type Mode } from './store';
 
 export interface Animator {
   play(events: GameEvent[], before: BattleState, after: BattleState, speed: number): Promise<void>;
@@ -81,6 +81,8 @@ function toneOf(state: BattleState, e: GameEvent): LogLine['tone'] {
     case 'disengage':
     case 'turnEnd':
       return side(e.unitId) === 'player' ? 'player' : 'enemy';
+    case 'spawn':
+      return side(e.sourceId) === 'player' ? 'player' : 'enemy';
     default:
       return 'info';
   }
@@ -274,6 +276,12 @@ export const controller = {
   setBoardView(boardView: BoardViewKind): void {
     store.setState({ boardView });
     persist(BOARD_VIEW_KEY, boardView);
+  },
+
+  /** Toggle team-colour outlines around 3D figures; remembered per browser. */
+  setBoardOutlines(on: boolean): void {
+    store.setState({ boardOutlines: on });
+    persist(BOARD_OUTLINES_KEY, on ? 'on' : 'off');
   },
 
   /** Finish or skip the first-telegraph guide (done) or queue it to replay at the next telegraph (not done). */

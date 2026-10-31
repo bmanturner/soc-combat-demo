@@ -6,8 +6,11 @@ export const COLORS = {
   cover: '#6d5536',
   floor: {
     granary: '#6b5a3e',
+    rat_nest: '#5f5139',
     wolves: '#7a6a48',
+    bandits: '#76664a',
     cultists: '#57493f',
+    valley_bandits: '#7d6c4c',
     nephilim: '#4b4a51',
     default: '#5e5040',
   },

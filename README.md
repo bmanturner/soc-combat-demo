@@ -4,14 +4,21 @@ A browser sandbox for Aaron to play and tune AP-timeline tactics before a full e
 
 ## What is playable
 
-- **Four encounters:** The Granary (tutorial), Road Wolves, The Ruined Shrine (cultists), and The Trapped Nephilim (boss).
+- **Seven encounters:** The Granary (tutorial), The Rat Nest (a brood mother who summons rats mid-battle), Road Wolves, Bandits on the Trail, The Ruined Shrine (cultists), Valley Road Bandits (three-person party), and The Trapped Nephilim (boss).
 - **Nine weapon families:** daggers, sword & shield, polearm, two-handed, bow, crossbow, dual wield, javelin & shield, colossal. Modes include javelin thrust/throw and colossal line/sweep; dual wield resolves a primary then a random eligible secondary.
 - **Two carried slots**, paid swapping, per-instance reload/cooldown state, and basic + proficiency skills. The proficiency and special-family unlock switches are sandbox conveniences, not a skill tree. Granary keeps four starter melee families and clothing; later encounters admit the wider catalog subject to unlocks.
 - **Crossbow reload policies:** flexible permits other actions before paying the reload; strict enforces the next combat action as reload. Firing and reloading remain separate paid actions.
 - **Shared previews:** movement/path engagement risks, attack/skill damage and reactions, reload/swap costs, next-turn ghosts and delayed-effect escape outlook use the same rules as execution. They are current-board estimates, not promises about future AI moves or random outcomes. Delayed skills default to no reactions but can explicitly author exceptions.
 - **Learning telegraphs:** the first player turn with a telegraph on the board shows a short three-step lesson (tiles → when it lands → your next-turn marker), docked above Incoming; it never blocks the board, is remembered per browser, and Help can replay it. At impact, party members who stepped out get **ESCAPED**, and anyone caught gets the reason on the board and in the log: their turn came too late, no clear tile was in reach, they were held, or they stayed in.
 - **Rules tuning:** grouped controls cover timeline, movement, engagement, flanking, reactions, damage, boss behavior, Weapons, **Weapon tuning** and **Enemy tuning**. Badges distinguish *Aaron's rule*, *Tentative math* and *Demo default*, with rationale. Weapon/skill/unit/armor data separates sourced concepts from tentative/demo numbers. Not every design question is an exposed control; changing fight rules restarts the fight.
-- **Feedback:** result reports include telemetry, config changes and a setup link. Share links reproduce **encounter, two-slot loadout, seed and rules — not an action replay**. The same seed only reproduces a fight when the action sequence also matches. Human play and expert/novice bot policies are distinct balance samples.
+- **Feedback:** the result screen offers **Copy report** (Markdown to paste) and **Download JSON** (`soc-fight-summary/1`, built in `src/game/report.ts`). Both carry the prototype-question telemetry per unit:
+  - turn shape (all-in, acted with movement left, no combat action) and unused movement;
+  - move / action / wait / reaction / daze AP;
+  - per attack and skill: enemies in the pattern, multi-target and multi-hit uses, allies caught, damage;
+  - every telegraph with who escaped, avoided or was caught and why, flagging catches after an end-turn preview that said the unit could still get out;
+  - who went down, when, and to what.
+
+  Both also include config changes and a setup link. Share links reproduce **encounter, two-slot loadout, seed and rules — not an action replay**. The same seed only reproduces a fight when the action sequence also matches. Human play and expert/novice bot policies are distinct balance samples.
 - **2D or 3D board:** the top-bar **2D / 3D** toggle switches between the Phaser board and a three.js board (remembered per browser, not part of share links). Both draw the same overlays, labels and event choreography; 3D adds orbit (drag) and zoom (wheel). A drag never commits; click in place to act.
 - **Phones and tablets:** portrait stacks the timeline, board and a collapsible Actions / Incoming & log panel, with game options behind the **⋯** menu; landscape puts the board left and the HUD right. On touch, the first tap on a tile, Swap or Reload previews it (path, AP, odds, timeline ghost, danger), and a second tap on the same target commits. Mouse keeps single-click commit.
 
@@ -40,7 +47,7 @@ npx tsx tools/balance-math.ts
 npx tsx tools/check-balance-source.ts
 ```
 
-Encounter IDs are `granary`, `wolves`, `cultists`, `nephilim`. `trials` is seeds per legal loadout/armor cell; `weapons` is a comma-separated ID filter (`hunting_bow`, `two_handed`, `dual_wield`, `javelin_shield` use these IDs). `combos=1` adds supported two-slot pairs, not every permutation. Sim output includes `ROW` JSON, win/HP, stalls and illegal fallbacks; diagnostic failures set a nonzero exit code. The trace prints a real seeded fight. Balance math reports analytic budgets; the source checker compares protected values/status against retained revision `83cd5df` (include it in a shallow checkout). None alone proves balance or turns demo numbers into canon.
+Encounter IDs are `granary`, `rat_nest`, `wolves`, `bandits`, `cultists`, `valley_bandits`, `nephilim`. `trials` is seeds per legal loadout/armor cell; `weapons` is a comma-separated ID filter (`hunting_bow`, `two_handed`, `dual_wield`, `javelin_shield` use these IDs). `combos=1` adds supported two-slot pairs, not every permutation. Sim output includes `ROW` JSON, win/HP, stalls and illegal fallbacks; diagnostic failures set a nonzero exit code. The trace prints a real seeded fight. Balance math reports analytic budgets; the source checker compares protected values/status against retained revision `83cd5df` (include it in a shallow checkout). None alone proves balance or turns demo numbers into canon.
 
 ## Layout and phase evidence
 

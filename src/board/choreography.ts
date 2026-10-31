@@ -23,6 +23,8 @@ export interface Stage {
   /** Hit flash: dim and recover twice. */
   blinkToken(id: string, ms: number): Promise<void>;
   fadeToken(id: string, alpha: number, ms: number): Promise<void>;
+  /** Create the token for a unit that joined mid-battle and grow it in over `ms`. */
+  spawnToken(unit: UnitState, ms: number): Promise<void>;
   paintToken(id: string, unit: UnitState, active: boolean): void;
   /** Flash tiles then fade them out over `ms`. */
   flashTiles(tiles: Vec[], color: string, alpha: number, ms: number): Promise<void>;
@@ -166,6 +168,14 @@ export async function choreograph(stage: Stage, events: GameEvent[], before: Bat
           if (u?.side === 'player') stage.float(above(unitCenter(u), 0.3), 'ESCAPED', COLORS.ready);
         }
         await stage.flashTiles(e.tiles, '#ffe2b0', 0.85, 520 * k);
+        break;
+      }
+      case 'spawn': {
+        const u = after.units.find((x) => x.id === e.unitId);
+        if (!u) break;
+        const fresh = { ...structuredClone(u), pos: { ...e.at }, hp: u.maxHp, ko: false };
+        view.units.push(fresh);
+        await stage.spawnToken(fresh, 260 * k);
         break;
       }
       case 'turnStart': {

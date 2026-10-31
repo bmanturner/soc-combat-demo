@@ -40,9 +40,9 @@ A new unit template without a figure still shows as the pawn (or the block, for 
 - **Throw versus strike** is decided from rules data, not distance: `shot` skills and ranged weapon modes throw (knife, javelin, daze orb). Area effects (`sigil` skills) are cast with nothing flying.
 - **Projectiles** fly from the attacker to the target between the lunge peak and the strike result: arrows, crossbow bolts, tumbling knives, javelins, the Seer's daze orb and the Nephilim's boulder. A strike on a multi-tile unit faces and aims at its nearest footprint tile.
 - **Ranged lunge:** capped at an adjacent diagonal's lean, on both boards, so archers no longer dash toward distant targets. Melee lunges are unchanged.
-- **Board fit:** small figures are scaled ×1.35 (`FIGURE_SCALE`) so they read at the default camera, and the Nephilim is built at world size. Figure plates are anchored by their lower edge with a screen-aligned gap, which clears long bodies from any orbit angle. Floating combat text starts from each unit's top.
+- **Board fit:** small figures are scaled ×1.35 (`FIGURE_SCALE`) so they read at the default camera, and the Nephilim is built at world size. Each unit's plate is a compact tag (status, glyph pill, HP bar) of constant screen size, anchored by its lower edge a few pixels above the head, so it clears the unit to the north from any orbit angle or zoom. Units sharing a template carry numbered glyphs (W1, W2, W3). Floating combat text starts from each unit's top.
+- **Team outlines:** an optional board toggle (`Outlines`, off by default, remembered per browser) draws a thin teal or crimson edge around each living figure, for figures that blend into dark walls.
 - **Known limits:**
-  - **Plates over neighbours:** a unit's plate still overlaps the tile to its north, as it did with pawns.
   - **Projectile timing:** projectiles take one lunge leg to arrive regardless of distance, so long shots are very fast at speed 1.
 
 ## Constraints from the current board
@@ -50,7 +50,7 @@ A new unit template without a figure still shows as the pawn (or the block, for 
 | Constraint | Source | What it means for models |
 | --- | --- | --- |
 | 1 tile = 1 world unit; pawn is ~0.52 wide, 0.62 tall | `PAWN`, `PAWN_HEIGHT` | Humanoids ~0.70–0.85 tall, fit inside a 0.6 radius so neighbours and walls stay visible |
-| Floating plate at y = 1.5 (boss 2.7) | `PLATE_HEIGHT` | Heads must stay well below the plate; boss below ~2.3 |
+| Floating plate: fixed-size screen tag just above the head (boss 136×94 px) | `TAG`, `BOSS_PLATE` in `meshes.ts` | Taller models push their tag up; no fixed ceiling |
 | "The Circle Is a Unit" rule; teal kin / crimson foe | DESIGN.md | Keep the circular base disc and side-colour ring under every model. The model adds character, the base keeps the meaning |
 | Boss is the only rectangle-bodied unit, sized to its 3×2 footprint | DESIGN.md, `nephilim.footprint` | The Nephilim's rubble mound fills the 3×2 frame |
 | KO fades to 22%, hits flash | `fadeToken`, `blinkToken` | Each instance needs its own cloned, transparent-capable materials |

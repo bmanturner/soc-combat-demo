@@ -34,10 +34,10 @@ async function box(page: Page, testId: string) {
   return (await page.getByTestId(testId).boundingBox())!;
 }
 
-/** The first tap on (4,4) previews the 40 AP move without committing; the second tap commits it. */
+/** The first tap on (4,4) previews the 40 AP move (+25 no-action) without committing; the second tap commits it. */
 async function twoTapMove(page: Page) {
   await tapTile(page, 4, 4);
-  await expect(page.getByTestId('ghost-text')).toContainText('next turn in 40');
+  await expect(page.getByTestId('ghost-text')).toContainText('next turn in 65');
   expect(await jubalPos(page)).toEqual({ x: 4, y: 8 });
   expect(await actions(page)).toHaveLength(0);
   await tapTile(page, 4, 4);

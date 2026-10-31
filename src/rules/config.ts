@@ -5,7 +5,7 @@ export type SettingStatus = 'source' | 'tentative' | 'demo';
 
 import type { PlayerWeaponFamily } from './types';
 export const PLAYER_FAMILIES: PlayerWeaponFamily[] = ['daggers', 'shield', 'polearm', 'two_handed', 'bow', 'crossbow', 'dual_wield', 'javelin_shield', 'colossal'];
-export const ENEMY_TEMPLATES = ['small_rat', 'wolf', 'cultist_fighter', 'cultist_mage', 'nephilim'] as const;
+export const ENEMY_TEMPLATES = ['small_rat', 'brood_rat', 'large_rat', 'wolf', 'bandit_fighter', 'bandit_archer', 'rat_brood_mother', 'cultist_fighter', 'cultist_mage', 'nephilim'] as const;
 export type EnemyTemplateId = typeof ENEMY_TEMPLATES[number];
 type Tuning = Record<`wpn_${PlayerWeaponFamily}_${'dmg' | 'hit'}` | `enemy_${EnemyTemplateId}_${'hp' | 'dmg'}`, number>;
 const TUNING_DEFAULTS = Object.fromEntries([
@@ -26,7 +26,7 @@ export interface RulesConfig extends Tuning {
   weaponSwapAp: number;
   // Timeline
   movementBudget: number;
-  minTurnDelay: number;
+  noActionTurnAp: number;
   autoEndTurn: boolean;
   tieUnitBeforeEffect: boolean;
   tiePlayerFirst: boolean;
@@ -78,6 +78,8 @@ export interface RulesConfig extends Tuning {
   bossBreakFreeAt: number;
   // Encounter knobs
   wolfPackFear: boolean;
+  broodMaxRats: number;
+  broodLargeRatChance: number;
   playerDamageMult: number;
   enemyDamageMult: number;
   enemyHpMult: number;
@@ -96,7 +98,7 @@ export const DEFAULT_CONFIG: RulesConfig = {
   crossbowReload: 'flexible',
   weaponSwapAp: 50,
   movementBudget: 50,
-  minTurnDelay: 25,
+  noActionTurnAp: 25,
   autoEndTurn: true,
   tieUnitBeforeEffect: true,
   tiePlayerFirst: true,
@@ -140,6 +142,8 @@ export const DEFAULT_CONFIG: RulesConfig = {
   coverCampTurns: 2,
   bossBreakFreeAt: 1200,
   wolfPackFear: true,
+  broodMaxRats: 4,
+  broodLargeRatChance: 0.25,
   playerDamageMult: 1,
   enemyDamageMult: 1,
   enemyHpMult: 1,
@@ -172,7 +176,7 @@ export const SETTINGS: SettingDef[] = [
   // Timeline
   { key: 'movementBudget', label: 'Movement AP per turn', group: 'Timeline', type: 'number', min: 20, max: 100, step: 5, unit: 'AP', status: 'source', why: 'Aaron: movement turns cap at 50 AP → 5/4/3 tiles for light/medium/heavy.' },
   { key: 'autoEndTurn', label: 'Auto-end exhausted turns', group: 'Timeline', type: 'boolean', status: 'demo', why: 'After acting, end automatically when movement is locked or less than one tile remains. Toggle off for manual timing experiments.' },
-  { key: 'minTurnDelay', label: 'Wait (empty turn) costs', group: 'Timeline', type: 'number', min: 5, max: 100, step: 5, unit: 'AP', status: 'demo', why: 'Empty turns cost 25 AP by default to prevent zero-time loops; nonempty turns cost AP actually spent. The minimum configurable wait is 5 AP.' },
+  { key: 'noActionTurnAp', label: 'Turn without an action adds', group: 'Timeline', type: 'number', min: 5, max: 100, step: 5, unit: 'AP', status: 'source', why: 'Aaron (playtest ruling): ending a turn without taking any action (attack, skill, reload or swap) adds 25 AP on top of the movement spent; applies to enemies too. Not yet in the wiki: Transcriptions › Combat Actions / Turn Flow says the delay is the AP spent. A Wait costs just this surcharge; the 5 AP minimum prevents zero-time loops.' },
   { key: 'tieUnitBeforeEffect', label: 'Ties: units act before effects land', group: 'Timeline', type: 'boolean', status: 'demo', why: 'Undefined. Units first makes a 0 AP escape margin survivable ("exact timing"), matching the Tentative Math reading.' },
   { key: 'tiePlayerFirst', label: 'Ties: party acts before enemies', group: 'Timeline', type: 'boolean', status: 'demo', why: 'Undefined. Predictable and slightly player-favoured.' },
   // Movement
@@ -223,6 +227,8 @@ export const SETTINGS: SettingDef[] = [
   { key: 'coverCampTurns', label: 'Boss turns before flushing cover', group: 'Nephilim', type: 'number', min: 1, max: 5, step: 1, unit: 'turns', status: 'demo', why: 'Boss turns a ranged unit may hide unseen before rockfall targets it.' },
   // Encounter knobs
   { key: 'wolfPackFear', label: 'Wolves scatter when one dies', group: 'Encounters', type: 'boolean', status: 'source', why: "Aaron's possible pack mechanic: survivors flee for a turn, then regroup." },
+  { key: 'broodMaxRats', label: 'Brood Mother: most rats alive at once', group: 'Encounters', type: 'number', min: 2, max: 12, step: 1, status: 'demo', why: 'Aaron: the brood mother summons smaller rats. The cap on living brood rats (small and large) is a demo limit so the fight always ends. Demo 6→4 alongside Tentative Math brood-rat damage and a 150 AP summon cooldown: a 20-seed screen kept every family at 90%+ wins with fewer KOs; 100-seed confirmation pending.' },
+  { key: 'broodLargeRatChance', label: 'Brood Mother: chance a summon is a Large Rat', group: 'Encounters', type: 'number', min: 0, max: 1, step: 0.05, unit: '%', status: 'demo', why: 'Rolled per summoned rat. Large Rat stats follow Tentative Math; the brood mother calling them, and this chance, are demo choices.' },
   { key: 'playerDamageMult', label: 'Party damage multiplier', group: 'Encounters', type: 'number', min: 0.25, max: 3, step: 0.05, unit: 'x', status: 'demo', why: 'Global difficulty knob.' },
   { key: 'enemyDamageMult', label: 'Enemy damage multiplier', group: 'Encounters', type: 'number', min: 0.25, max: 3, step: 0.05, unit: 'x', status: 'demo', why: 'Global difficulty knob.' },
   { key: 'enemyHpMult', label: 'Enemy HP multiplier', group: 'Encounters', type: 'number', min: 0.25, max: 3, step: 0.05, unit: 'x', status: 'demo', why: 'Global difficulty knob.' },

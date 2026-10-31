@@ -105,7 +105,7 @@ export function pendingFor(s: Pick<GameStore, 'battle' | 'hoverTile' | 'mode' | 
     if (!a.acted) {
       const p = previewAttack(b, u, tile);
       if (p) {
-        const projected = projectedNextTurn(b, p.apCost);
+        const projected = projectedNextTurn(b, p.apCost, true);
         const j = judge(b, u.pos, projected);
         return { extra: p.apCost, tile: u.pos, what: u.attack.name, projected, danger: j.danger, dangerText: j.text, verdict: verdictFor(b, u.pos, projected, j) };
       }
@@ -115,7 +115,7 @@ export function pendingFor(s: Pick<GameStore, 'battle' | 'hoverTile' | 'mode' | 
   if (a.acted) return null;
   const p = s.mode.kind === 'skill' ? previewSkill(b, u, s.mode.skillId, tile) : previewAttack(b, u, tile, u.pos, s.mode.kind === 'attack' ? s.mode.modeId : undefined);
   if (!p) return null;
-  const projected = projectedNextTurn(b, p.apCost);
+  const projected = projectedNextTurn(b, p.apCost, true);
   const j = judge(b, u.pos, projected);
   const what = s.mode.kind === 'skill' ? (SKILLS[s.mode.skillId]?.name ?? 'Skill') : (attackModes(b,u).find(m => m.id === p.modeId)?.name ?? u.attack.name);
   return { extra: p.apCost, tile: u.pos, what, projected, danger: j.danger, dangerText: j.text, verdict: verdictFor(b, u.pos, projected, j) };

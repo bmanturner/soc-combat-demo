@@ -48,13 +48,13 @@ describe('shared combat contract', () => {
     unitById(b, 'jubal').canEngage = false; // equipment-level ranged threat, not selected mode
     expect(isFlanked(b, t)).toBe(false);
   });
-  it('timeline golden: ten movement plus seven reaction AP projects 17, not Wait price', () => {
+  it('timeline golden: ten movement plus seven reaction AP with no action projects 42 (17 + 25 no-action surcharge), not Wait price', () => {
     let b = duel(); b.active!.reactionSpent = 7;
     b = applyAction(b, { type: 'move', unitId: 'jubal', to: { x: 3, y: 2 } }).state;
-    expect(projectedNextTurn(b, 0)).toBe(17);
+    expect(projectedNextTurn(b, 0)).toBe(42);
     const ended = applyAction(b, { type: 'endTurn', unitId: 'jubal' });
-    expect(ended.events.find(e => e.t === 'turnEnd')).toMatchObject({ spent: 17, delay: 17, nextTurnAt: 17 });
-    expect(timelineEntries(ended.state).map(x => [x.id, x.at])).toEqual([['jubal', 0], ['wolf', 982]]);
+    expect(ended.events.find(e => e.t === 'turnEnd')).toMatchObject({ spent: 17, delay: 42, nextTurnAt: 42 });
+    expect(timelineEntries(ended.state).map(x => [x.id, x.at])).toEqual([['jubal', 0], ['wolf', 957]]);
   });
   it.each([true, false])('effect and unit tie predicates honor configuration %s', first => {
     const b = duel(), u = b.units[0]!, t = b.units[1]!;

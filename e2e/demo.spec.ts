@@ -31,10 +31,10 @@ async function startEncounter(page: Page, id: string, weapon = 'daggers', armor?
   await page.waitForFunction(() => !!(window as unknown as { __soc: Soc }).__soc.tileCenter);
 }
 
-test('menu lists the four encounters', async ({ page }) => {
+test('menu lists every encounter', async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto('/');
-  for (const id of ['granary', 'wolves', 'cultists', 'nephilim']) await expect(page.getByTestId(`enc-${id}`)).toBeVisible();
+  for (const id of ['granary', 'rat_nest', 'wolves', 'bandits', 'cultists', 'valley_bandits', 'nephilim']) await expect(page.getByTestId(`enc-${id}`)).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -47,7 +47,7 @@ test('player can move by clicking the board, and the timeline previews the cost'
   const box = (await canvas.boundingBox())!;
   const c = await page.evaluate(() => (window as unknown as { __soc: Soc }).__soc.tileCenter!(4, 4));
   await page.mouse.move(box.x + c.x, box.y + c.y);
-  await expect(page.getByTestId('ghost-text')).toContainText('next turn in 40');
+  await expect(page.getByTestId('ghost-text')).toContainText('next turn in 65');
   await clickTile(page, 4, 4);
   await expect(page.getByTestId('log')).toContainText('Jubal moves 4 tiles to (4,4) (40 AP)');
   const pos = await page.evaluate(() => (window as unknown as { __soc: Soc }).__soc.store.getState().battle!.units.find((u) => u.id === 'jubal')!.pos);

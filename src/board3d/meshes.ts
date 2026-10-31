@@ -109,10 +109,13 @@ export interface Token3D {
   top: number;
 }
 
-const PLATE_W = 256;
-const PLATE_H = 176;
-/** HP bar row on the plate canvas; its backing box ends 24px lower, the plate's lowest painted edge. */
-const PLATE_BAR_Y = 148;
+const TAG_RES = 3;
+/** Small-unit tag (CSS px): badge row, glyph pill, HP bar. */
+const TAG = { w: 96, h: 40, badgeH: 12, pillW: 36, pillH: 20, pillY: 13, barW: 36, barH: 4, barY: 35 } as const;
+/** Boss plate canvas (unchanged painting) and its constant on-screen size in CSS px. */
+const BOSS_PLATE = { w: 256, h: 176, barY: 148, cssW: 136, cssH: 94 } as const;
+/** Screen gap (CSS px) between the anchor (head top) and the tag's painted lower edge. */
+const TAG_GAP = 4;
 const FONT = 'Georgia, "Times New Roman", serif';
 const UI_FONT = 'Inter, "Segoe UI", system-ui, sans-serif';
 
@@ -122,17 +125,7 @@ const PAWN = [
 ].map(([r, h]) => new THREE.Vector2(r!, h!));
 
 export const PAWN_HEIGHT = 0.62;
-/** Floating plate sprite size (world units wide) per token kind. */
-export const PLATE_SCALE = { pawn: 2.0, boss: 2.5 };
-/** Plate centre above a pawn's top: the HP bar along the plate's lower edge clears the head. */
-const PLATE_CLEARANCE = 0.88;
-/**
- * Screen-aligned gap (world units) between a figure's top and its plate's lowest edge. Height alone can't clear
- * figures from a steep camera: their bodies cover ground that projects up into the plate.
- */
-const FIGURE_PLATE_GAP = 0.42;
 const BOSS_TOP = 1.8;
-const BOSS_PLATE_HEIGHT = 2.7;
 /** Figures are modelled near pawn size; scaled up so their silhouettes read at the default camera distance. */
 const FIGURE_SCALE = 1.35;
 
@@ -150,7 +143,6 @@ export function makeToken(u: UnitState): Token3D {
   let pickables: THREE.Object3D[] = [];
   let ringGeometry: THREE.BufferGeometry;
   let hoverGeometry: THREE.BufferGeometry;
-  let plateHeight: number;
   let figure: Figure | null;
   let top = PAWN_HEIGHT;
 
@@ -188,7 +180,6 @@ export function makeToken(u: UnitState): Token3D {
     const hover = new GroundShape();
     hover.frame(-w / 2 - 0.02, -h / 2 - 0.02, w + 0.04, h + 0.04, 0.04);
     hoverGeometry = groundGeometry(hover);
-    plateHeight = figure ? top : BOSS_PLATE_HEIGHT;
   } else {
     const base = new THREE.Mesh(
       new THREE.CylinderGeometry(0.28, 0.3, 0.05, 32),
@@ -221,7 +212,6 @@ export function makeToken(u: UnitState): Token3D {
     }
     ringGeometry = new THREE.RingGeometry(0.32, 0.38, 40).rotateX(-Math.PI / 2);
     hoverGeometry = new THREE.RingGeometry(0.41, 0.45, 40).rotateX(-Math.PI / 2);
-    plateHeight = figure ? top : top + PLATE_CLEARANCE;
   }
 
   const ring = new THREE.Mesh(ringGeometry, track(new THREE.MeshBasicMaterial({ color: sideColor, depthWrite: false, side: THREE.DoubleSide })));
@@ -233,21 +223,38 @@ export function makeToken(u: UnitState): Token3D {
   hoverRing.visible = false;
 
   const plateCanvas = document.createElement('canvas');
-  plateCanvas.width = PLATE_W;
-  plateCanvas.height = PLATE_H;
+  plateCanvas.width = big ? BOSS_PLATE.w : TAG.w * TAG_RES;
+  plateCanvas.height = big ? BOSS_PLATE.h : TAG.h * TAG_RES;
   const plateTexture = new THREE.CanvasTexture(plateCanvas);
   plateTexture.colorSpace = THREE.SRGBColorSpace;
   plateTexture.anisotropy = 4;
-  const plate = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: plateTexture, depthTest: false, depthWrite: false })));
-  const plateScale = big ? PLATE_SCALE.boss : PLATE_SCALE.pawn;
-  plate.scale.set(plateScale, (plateScale * PLATE_H) / PLATE_W, 1);
-  plate.position.y = plateHeight;
-  // Figures: anchor the sprite by its painted lower edge, offset in screen space, so it clears from any orbit angle.
-  if (figure) plate.center.set(0.5, (PLATE_H - PLATE_BAR_Y - 24) / PLATE_H - FIGURE_PLATE_GAP / plate.scale.y);
+  // Constant screen size: ThreeBoard sets the scale from the camera (sizePlate); the anchor is screen-space too.
+  const plate = new THREE.Sprite(track(new THREE.SpriteMaterial({ map: plateTexture, depthTest: false, depthWrite: false, sizeAttenuation: false })));
+  if (big) {
+    plate.position.y = figure ? top : BOSS_TOP;
+    plate.center.set(0.5, (BOSS_PLATE.h - BOSS_PLATE.barY - 24) / BOSS_PLATE.h - TAG_GAP / BOSS_PLATE.cssH);
+  } else {
+    // The tag's lower edge sits TAG_GAP px above the head top on screen, from any orbit angle.
+    plate.position.y = top;
+    plate.center.set(0.5, -TAG_GAP / TAG.h);
+  }
   plate.renderOrder = 20;
   root.add(ring, hoverRing, plate);
 
   return { unitId: u.id, root, pickables, ring, hoverRing, plate, plateCanvas, plateTexture, plateKey: '', materials, big, alpha: 1, flash: 1, badge: '', figure, top };
+}
+
+/** Sets the plate's scale so it covers its fixed CSS-pixel size; `unitsPerPx` comes from the camera. */
+export function sizePlate(tok: Token3D, unitsPerPx: number): void {
+  const [w, h] = tok.big ? [BOSS_PLATE.cssW, BOSS_PLATE.cssH] : [TAG.w, TAG.h];
+  tok.plate.scale.set(w * unitsPerPx, h * unitsPerPx, 1);
+}
+
+/** Painted part of the plate sprite as fractions (x left→right, y top→bottom), for label obstacles and tests. */
+export function platePainted(tok: Token3D): { x0: number; y0: number; x1: number; y1: number } {
+  if (tok.big) return { x0: 0, y0: 0, x1: 1, y1: (BOSS_PLATE.barY + 24) / BOSS_PLATE.h };
+  if (tok.badge) return { x0: 0, y0: 0, x1: 1, y1: 1 };
+  return { x0: (TAG.w - TAG.barW - 2) / 2 / TAG.w, y0: TAG.pillY / TAG.h, x1: (TAG.w + TAG.barW + 2) / 2 / TAG.w, y1: 1 };
 }
 
 function groundGeometry(shape: GroundShape): THREE.BufferGeometry {
@@ -256,7 +263,7 @@ function groundGeometry(shape: GroundShape): THREE.BufferGeometry {
   return geometry;
 }
 
-/** Repaint selection rings, opacity and the floating plate (glyph medallion, status, HP). */
+/** Repaint selection rings, opacity and the floating plate (glyph pill, status, HP). */
 export function paintToken(tok: Token3D, u: UnitState, active: boolean, hovered: boolean): void {
   const sideColor = u.side === 'player' ? COLORS.party : COLORS.enemy;
   tok.ring.material.color.set(active ? COLORS.gold : tok.big && hovered ? '#ffffff' : sideColor);
@@ -270,56 +277,81 @@ export function paintToken(tok: Token3D, u: UnitState, active: boolean, hovered:
   if (key === tok.plateKey) return;
   tok.plateKey = key;
   const g = tok.plateCanvas.getContext('2d')!;
-  g.clearRect(0, 0, PLATE_W, PLATE_H);
-  const cx = PLATE_W / 2;
-  if (tok.badge) {
+  g.clearRect(0, 0, tok.plateCanvas.width, tok.plateCanvas.height);
+  const frac = Math.max(0, u.hp / u.maxHp);
+  const hpColor = frac > 0.5 ? '#6fbf73' : frac > 0.25 ? '#e0b13a' : '#d9534f';
+  if (tok.big) paintBossPlate(g, tok.badge, u, frac, hpColor);
+  else paintTag(g, tok.badge, u, active ? COLORS.gold : sideColor, frac, hpColor);
+  tok.plateTexture.needsUpdate = true;
+}
+
+/** Compact tag: status row, glyph pill, short HP bar. Drawn at TAG_RES canvas px per CSS px. */
+function paintTag(g: CanvasRenderingContext2D, badge: string, u: UnitState, rim: string, frac: number, hpColor: string): void {
+  const R = TAG_RES;
+  const cx = (TAG.w * R) / 2;
+  if (badge) {
+    g.font = `bold ${10 * R}px ${UI_FONT}`;
+    g.textAlign = 'center';
+    g.textBaseline = 'top';
+    g.lineWidth = 3 * R;
+    g.lineJoin = 'round';
+    g.strokeStyle = '#000';
+    g.strokeText(badge, cx, R, (TAG.w - 4) * R);
+    g.fillStyle = '#ffd166';
+    g.fillText(badge, cx, R, (TAG.w - 4) * R);
+  }
+  g.beginPath();
+  g.roundRect(cx - (TAG.pillW * R) / 2, TAG.pillY * R, TAG.pillW * R, TAG.pillH * R, (TAG.pillH * R) / 2);
+  g.fillStyle = u.side === 'player' ? COLORS.partyDark : COLORS.enemyDark;
+  g.fill();
+  g.lineWidth = 2 * R;
+  g.strokeStyle = rim;
+  g.stroke();
+  g.font = `bold ${14 * R}px ${FONT}`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = '#f3e9d2';
+  g.fillText(u.glyph, cx, (TAG.pillY + TAG.pillH / 2 + 1) * R, (TAG.pillW - 6) * R);
+  g.fillStyle = 'rgba(0,0,0,0.8)';
+  g.fillRect(cx - (TAG.barW / 2 + 1) * R, (TAG.barY - 1) * R, (TAG.barW + 2) * R, (TAG.barH + 2) * R);
+  g.fillStyle = hpColor;
+  g.fillRect(cx - (TAG.barW * R) / 2, TAG.barY * R, TAG.barW * R * frac, TAG.barH * R);
+}
+
+/** Boss plate: status, large glyph, name and a wide HP bar. */
+function paintBossPlate(g: CanvasRenderingContext2D, badge: string, u: UnitState, frac: number, hpColor: string): void {
+  const cx = BOSS_PLATE.w / 2;
+  if (badge) {
     g.font = `bold 30px ${UI_FONT}`;
     g.textAlign = 'center';
     g.textBaseline = 'top';
     g.lineWidth = 7;
     g.lineJoin = 'round';
     g.strokeStyle = '#000';
-    g.strokeText(tok.badge, cx, 2, PLATE_W - 8);
+    g.strokeText(badge, cx, 2, BOSS_PLATE.w - 8);
     g.fillStyle = '#ffd166';
-    g.fillText(tok.badge, cx, 2, PLATE_W - 8);
+    g.fillText(badge, cx, 2, BOSS_PLATE.w - 8);
   }
   const my = 88;
-  if (tok.big) {
-    g.font = `bold 60px ${FONT}`;
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.lineWidth = 8;
-    g.lineJoin = 'round';
-    g.strokeStyle = '#000';
-    g.strokeText(u.glyph, cx, my - 10);
-    g.fillStyle = '#f3e9d2';
-    g.fillText(u.glyph, cx, my - 10);
-    g.font = `bold 30px ${FONT}`;
-    g.strokeText(u.name.toUpperCase(), cx, my + 38, PLATE_W - 12);
-    g.fillStyle = '#e8c9a0';
-    g.fillText(u.name.toUpperCase(), cx, my + 38, PLATE_W - 12);
-  } else {
-    g.beginPath();
-    g.arc(cx, my + 4, 54, 0, Math.PI * 2);
-    g.fillStyle = u.side === 'player' ? COLORS.partyDark : COLORS.enemyDark;
-    g.fill();
-    g.lineWidth = 8;
-    g.strokeStyle = active ? COLORS.gold : sideColor;
-    g.stroke();
-    g.font = `bold 62px ${FONT}`;
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillStyle = '#f3e9d2';
-    g.fillText(u.glyph, cx, my + 8);
-  }
-  const bw = tok.big ? 220 : 108;
-  const by = PLATE_BAR_Y;
-  const frac = Math.max(0, u.hp / u.maxHp);
+  g.font = `bold 60px ${FONT}`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.lineWidth = 8;
+  g.lineJoin = 'round';
+  g.strokeStyle = '#000';
+  g.strokeText(u.glyph, cx, my - 10);
+  g.fillStyle = '#f3e9d2';
+  g.fillText(u.glyph, cx, my - 10);
+  g.font = `bold 30px ${FONT}`;
+  g.strokeText(u.name.toUpperCase(), cx, my + 38, BOSS_PLATE.w - 12);
+  g.fillStyle = '#e8c9a0';
+  g.fillText(u.name.toUpperCase(), cx, my + 38, BOSS_PLATE.w - 12);
+  const bw = 220;
+  const by = BOSS_PLATE.barY;
   g.fillStyle = 'rgba(0,0,0,0.8)';
   g.fillRect(cx - bw / 2 - 4, by - 4, bw + 8, 28);
-  g.fillStyle = frac > 0.5 ? '#6fbf73' : frac > 0.25 ? '#e0b13a' : '#d9534f';
+  g.fillStyle = hpColor;
   g.fillRect(cx - bw / 2, by, bw * frac, 20);
-  tok.plateTexture.needsUpdate = true;
 }
 
 export function applyOpacity(tok: Token3D): void {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { botAction, enemyAction, plannedActionAp, pathFailureCost, partyFocus } from './ai';
 import { applyAction } from './engine';
 import { previewAttack, previewSkill } from './queries';
-import { unitById } from './state';
+import { distToUnit, lineOfSight, unitById } from './state';
 import { OPEN_7x7, testBattle } from './testkit';
 import type { BattleState } from './types';
 
@@ -137,5 +137,37 @@ describe('AI intent regressions', () => {
     const pursuit = enemyAction(s);
     expect(pursuit.type).toBe('move');
     if (pursuit.type === 'move') expect(pursuit.to.x).toBeLessThan(7);
+  });
+
+  it('Brood Mother calls the brood when ready and bites when she cannot', () => {
+    const s = testBattle({ rows: OPEN_7x7, jubal: { x: 0, y: 0 }, enemies: [{ template: 'rat_brood_mother', id: 'mother', at: { x: 3, y: 3 } }] });
+    activate(s, 'mother');
+    expect(enemyAction(s)).toMatchObject({ type: 'skill', skillId: 'call_the_brood' });
+    unitById(s, 'mother').personalSkills[0]!.readyAt = 999;
+    unitById(s, 'jubal').pos = { x: 2, y: 3 };
+    expect(enemyAction(s).type).toBe('attack');
+  });
+
+  it('Bandit archer shoots from range and steps out of melee to a firing tile', () => {
+    const s = testBattle({ rows: OPEN_7x7, jubal: { x: 1, y: 3 }, enemies: [{ template: 'bandit_archer', id: 'archer', at: { x: 5, y: 3 } }] });
+    activate(s, 'archer');
+    expect(enemyAction(s)).toMatchObject({ type: 'attack', target: { x: 1, y: 3 } });
+    const jubal = unitById(s, 'jubal');
+    jubal.pos = { x: 4, y: 3 };
+    const step = enemyAction(s);
+    expect(step.type).toBe('move');
+    if (step.type === 'move') expect(distToUnit(step.to, jubal)).toBeGreaterThanOrEqual(2);
+  });
+
+  it('Bandit archer moves around a wall to regain line of sight', () => {
+    const s = testBattle({ rows: ['.......', '...#...', '...#...', '...#...', '...#...', '...#...', '.......'], jubal: { x: 1, y: 3 }, enemies: [{ template: 'bandit_archer', id: 'archer', at: { x: 5, y: 3 } }] });
+    activate(s, 'archer');
+    const step = enemyAction(s);
+    expect(step.type).toBe('move');
+    if (step.type === 'move') {
+      expect(lineOfSight(s, step.to, { x: 1, y: 3 })).toBe(true);
+      expect(distToUnit(step.to, unitById(s, 'jubal'))).toBeGreaterThanOrEqual(2);
+      expect(distToUnit(step.to, unitById(s, 'jubal'))).toBeLessThanOrEqual(8);
+    }
   });
 });

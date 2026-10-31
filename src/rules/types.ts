@@ -89,7 +89,8 @@ export type SkillKind =
   | 'hook' // straight-line target at range 2, pulls adjacent
   | 'shot' // ranged single target
   | 'sigil' // delayed area effect
-  | 'sweep'; // boss: delayed effect over the encounter's sweep zone
+  | 'sweep' // boss: delayed effect over the encounter's sweep zone
+  | 'summon'; // spawns copies of summon.template on open tiles beside the caster
 
 export interface SkillDef {
   fieldProvenance: Record<string, FieldProvenance>;
@@ -115,11 +116,14 @@ export interface SkillDef {
   radius?: number; // sigil: Chebyshev radius of the area
   /** Boss abilities whose numbers come from the rules config (so they're tunable live). */
   special?: 'sweep' | 'rockThrow' | 'rockfall';
+  /** Summon skills: the unit template to spawn, the display name for spawned units, the most units spawned per cast, and the AP after the cast at which they first act.
+   *  `variant` replaces a spawned unit with probability `config.broodLargeRatChance`, rolled per unit. */
+  summon?: { template: string; name: string; count: number; delay: number; variant?: { template: string; name: string } };
   description: string;
   status: 'source' | 'demo';
 }
 
-export type AiKind = 'swarm' | 'charger' | 'guardian' | 'caster' | 'nephilim';
+export type AiKind = 'swarm' | 'charger' | 'guardian' | 'caster' | 'nephilim' | 'skirmisher' | 'brood';
 
 export interface UnitTemplate {
   provenance: Provenance;
@@ -207,6 +211,8 @@ export interface DelayedEffect {
   threatenedAtCast: string[];
   /** Each unit's chance to get out, noted whenever it holds the turn before impact; explains catches. */
   escapeChances?: Record<string, EscapeChance>;
+  /** Per unit, whether its latest turn end inside the area predicted it could still escape (the next-turn ghost's verdict). */
+  endTurnPreviewSafe?: Record<string, boolean>;
 }
 
 /** At a unit's turn before impact: already clear or able to reach a clear tile, boxed in, or held while leaving. */
@@ -275,13 +281,41 @@ export interface Setup {
 
 export type Outcome = 'ongoing' | 'victory' | 'defeat';
 
+/** Per attack or skill (keyed by its log name): how a pattern actually landed. */
+export interface PatternStats {
+  kind: 'attack' | 'skill';
+  /** Weapon carried when used; null for personal skills. */
+  weaponId: string | null;
+  uses: number;
+  /** Sum over uses of distinct enemies the attack swung at. */
+  enemiesTargeted: number;
+  /** Sum over uses of distinct enemies that took damage. */
+  enemiesDamaged: number;
+  /** Uses that swung at two or more distinct enemies. */
+  multiTargetUses: number;
+  /** Uses that damaged two or more distinct enemies. */
+  multiHitUses: number;
+  mostEnemiesTargeted: number;
+  alliesTargeted: number;
+  damage: number;
+}
+
 export interface UnitTelemetry {
   reloads: number;
   swaps: number;
   turns: number;
+  /** Turn shape: acted with no whole tile of movement left / acted with movement left / ended without a combat action. */
+  turnsAllIn: number;
+  turnsActedWithMoveLeft: number;
+  turnsNoAction: number;
+  /** Movement budget left unspent at turn ends. */
+  moveLeftAp: number;
   moveAp: number;
   actionAp: number;
   waitAp: number;
+  /** Timeline delay from this unit's own dodge / parry / block, and from being dazed. */
+  reactionAp: number;
+  dazedAp: number;
   damageDealt: number;
   damageTaken: number;
   attacks: number;
@@ -289,8 +323,14 @@ export interface UnitTelemetry {
   kos: number;
   escapes: number;
   caught: number;
+  caughtBy: Record<CaughtReason, number>;
+  /** Caught although this unit's last turn end inside the area predicted it could still get out. */
+  caughtAfterSafePreview: number;
   disengageAttempts: number;
   disengageFails: number;
+  /** When and by what this unit was knocked out, if it was. */
+  downed: { at: number; by: string } | null;
+  patterns: Record<string, PatternStats>;
 }
 
 export interface BattleState {
@@ -360,7 +400,8 @@ export type GameEvent =
   | { t: 'status'; unitId: string; status: 'dazed' | 'feared' | 'recovered'; pushback?: number }
   | { t: 'displace'; unitId: string; from: Vec; to: Vec; reason: 'push' | 'pull' | 'dodge' }
   | { t: 'effectCast'; effect: DelayedEffect }
-  | { t: 'effectResolve'; effectId: string; name: string; tiles: Vec[]; at: number; hits: { unitId: string; damage: number; hpAfter: number; reactions?: ReactionResult[]; avoided?: ReactionResult['kind'] | null; displacedTo?: Vec; caught?: { reason: CaughtReason; nextTurnAt: number } }[]; /** Living units threatened at cast who were not hit. */ escaped: string[] }
+  | { t: 'effectResolve'; effectId: string; name: string; tiles: Vec[]; at: number; hits: { unitId: string; damage: number; hpAfter: number; reactions?: ReactionResult[]; avoided?: ReactionResult['kind'] | null; displacedTo?: Vec; caught?: { reason: CaughtReason; nextTurnAt: number; previewSafe?: boolean } }[]; /** Living units threatened at cast who were not hit. */ escaped: string[] }
   | { t: 'turnEnd'; unitId: string; spent: number; delay: number; nextTurnAt: number }
   | { t: 'outcome'; outcome: Outcome }
+  | { t: 'spawn'; unitId: string; sourceId: string; at: Vec }
   | { t: 'info'; text: string };

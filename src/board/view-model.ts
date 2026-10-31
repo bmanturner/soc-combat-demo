@@ -133,6 +133,18 @@ export function boardView(s: BoardViewInput): BoardView {
   const label = (anchor: Pt, text: string, color = '#ffffff', size = 0.22, bg?: string) => {
     view.labels.push({ anchor, text, color, size, ...(bg && { bg }) });
   };
+  // Path-style perimeter: edges between a tile in `tiles` (or `origin`) and a neighbour outside the set or the map.
+  const perimeter = (origin: Vec, tiles: Vec[], color: string, alpha: number) => {
+    const inside = new Set([key(origin), ...tiles.map(key)]);
+    for (const p of [origin, ...tiles]) {
+      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as const) {
+        if (inside.has(key({ x: p.x + dx, y: p.y + dy }))) continue;
+        const from = dx === 0 ? { x: p.x, y: p.y + (dy > 0 ? 1 : 0) } : { x: p.x + (dx > 0 ? 1 : 0), y: p.y };
+        const to = dx === 0 ? { x: p.x + 1, y: from.y } : { x: from.x, y: p.y + 1 };
+        view.segments.push({ layer: 'overlay', from, to, color, alpha, width: 2 });
+      }
+    }
+  };
 
   for (const u of b.units) view.tokens.push({ unit: u, active: b.active?.unitId === u.id, hovered: s.hoverUnitId === u.id, badge: statusBadge(b, u) });
 
@@ -157,6 +169,15 @@ export function boardView(s: BoardViewInput): BoardView {
   // Engagement links
   for (const [a, c] of engagedPairs(b)) {
     view.segments.push({ layer: 'links', from: unitCenter(unitById(b, a)), to: unitCenter(unitById(b, c)), color: COLORS.engage, alpha: 0.55, width: 2 });
+  }
+
+  // Hovered enemy (board or timeline): where it could end a move with a full movement budget on the current board.
+  // Drawn before the active unit's overlays so the player's own move and aim previews stay on top.
+  const hovered = s.hoverUnitId && b.outcome === 'ongoing' && !s.busy ? b.units.find((x) => x.id === s.hoverUnitId) : undefined;
+  if (hovered && hovered.side !== 'player' && alive(hovered) && !hovered.immobile && b.active?.unitId !== hovered.id) {
+    const tiles = [...reachable(b, hovered.id).values()].map((r) => r.path[r.path.length - 1]!).filter((p) => !eq(p, hovered.pos));
+    fill('overlay', tiles, COLORS.enemy, 0.12);
+    perimeter(hovered.pos, tiles, COLORS.enemy, 0.85);
   }
 
   const u = b.active && b.outcome === 'ongoing' ? unitById(b, b.active.unitId) : null;
@@ -204,16 +225,7 @@ export function boardView(s: BoardViewInput): BoardView {
     // skips tiles inside any telegraph that can hit this unit; Path Blue never mixes with the red zone.
     const telegraphed = new Set(b.effects.filter((e) => effectCanHit(b, e, u)).flatMap((e) => e.tiles.map(key)));
     fill('overlay', tiles.filter((p) => !telegraphed.has(key(p))), COLORS.move, 0.16);
-    // Path Blue perimeter: edges between a reachable tile and a non-reachable / out-of-map neighbour.
-    const inReach = new Set([key(u.pos), ...tiles.map(key)]);
-    for (const p of [u.pos, ...tiles]) {
-      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as const) {
-        if (inReach.has(key({ x: p.x + dx, y: p.y + dy }))) continue;
-        const from = dx === 0 ? { x: p.x, y: p.y + (dy > 0 ? 1 : 0) } : { x: p.x + (dx > 0 ? 1 : 0), y: p.y };
-        const to = dx === 0 ? { x: p.x + 1, y: from.y } : { x: from.x, y: p.y + 1 };
-        view.segments.push({ layer: 'overlay', from, to, color: COLORS.move, alpha: 0.85, width: 2 });
-      }
-    }
+    perimeter(u.pos, tiles, COLORS.move, 0.85);
     // Attackable enemies from here (click them to attack).
     if (!a.acted) for (const opt of attackOptions(b, u)) markTargets(opt, 0.25);
     const hov = s.hoverTile;

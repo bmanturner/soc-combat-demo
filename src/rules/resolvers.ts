@@ -19,10 +19,12 @@ export function unitActsBefore(state: BattleState, u: UnitState, at: number, tar
   return schedulerCompare(state.config, unitSchedule(state, u, at), other) < 0;
 }
 export function unitMinDelay(state: BattleState, u: UnitState): number {
-  return Math.max(5, u.massive ? state.config.bossTurnAp : state.config.minTurnDelay);
+  return Math.max(5, u.massive ? state.config.bossTurnAp : state.config.noActionTurnAp);
 }
-export function turnDelay(state: BattleState, u: UnitState, spent: number): number {
-  return round3(u.massive ? Math.max(spent, unitMinDelay(state, u)) : spent > 0 ? Math.max(0.001, spent) : unitMinDelay(state, u));
+/** Delay until the unit's next turn. Massive units keep a steady boss rhythm; everyone else pays what they spent, plus a no-action surcharge when they never acted (attack, skill, reload, swap). */
+export function turnDelay(state: BattleState, u: UnitState, spent: number, acted: boolean): number {
+  if (u.massive) return round3(Math.max(spent, unitMinDelay(state, u)));
+  return round3(acted ? Math.max(0.001, spent) : spent + unitMinDelay(state, u));
 }
 export function actionApCost(state: BattleState, u: UnitState, profile: { apCost: number; stationaryDiscount?: boolean; special?: SkillDef['special'] }, moved = false): number {
   return profile.special ? state.config.bossTurnAp : profile.apCost + (profile.stationaryDiscount && (moved || (state.active?.unitId === u.id && state.active.moved)) ? state.config.bowMoveSurcharge : 0);

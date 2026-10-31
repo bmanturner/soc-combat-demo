@@ -39,7 +39,8 @@ function parity(s:BattleState,a:Action){
   const u=unitById(s,a.unitId), active=s.active!;
   const p=a.type==='attack'?previewAttack(s,u,a.target,u.pos,a.modeId):a.type==='skill'?previewSkill(s,u,a.skillId,a.target):null;
   const ap=p?.apCost ?? (a.type==='reload'?previewReload(s,u).apCost:a.type==='swapWeapon'?previewSwap(s,u,a.slot).apCost:0);
-  const expectedDelay=projectedNextTurn(s,ap);
+  const acted=!['move','endTurn'].includes(a.type);
+  const expectedDelay=projectedNextTurn(s,ap,acted);
   const r=applyAction(s,a);
   if(!['move','endTurn'].includes(a.type)){
     const event=r.events.find(e=>(e.t==='attack'&&!e.free)||e.t==='reload'||e.t==='swapWeapon');
