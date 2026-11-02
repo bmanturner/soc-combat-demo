@@ -1,0 +1,124 @@
+{
+  "slug": "seer3",
+  "date": "2026-11-02",
+  "encounter": "cultists (The Ruined Shrine)",
+  "replaces": "meshy_output/seer/ (its rig placed spine and knee joints outside the body, so every clip bent the back the wrong way)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19c3f-878e-7438-ac0d-d78f2be0a683",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png",
+        "meshy_output/seer/seer-design.png"
+      ]
+    },
+    "prompt": "A full-body character design of a cultist seer, to be built into a 3D game model. Front view, standing in a T-pose: arms straight out to the sides at shoulder height, palms down, fingers slightly apart, legs slightly apart, feet flat. Empty hands: no weapon, no instrument, nothing carried or slung on the back. He is the same man shown in the second reference image: keep his gaunt face, grey-streaked beard, charcoal-black hood, the broad band of ash-white paint across his eyes, and his rope belt with small bronze charms exactly. He wears a charcoal-black (not pure black) robe of coarse wool, fitted at the chest and waist, with narrow sleeves that follow the arms to the wrist. Below the rope belt the robe is split: it opens up the front from the hem to the belt and is slit up both sides to the hip, so it hangs as long, narrow front and back panels that fall to the knee. Through the openings, close-fitting dark wool leggings show the shape of each leg from hip to ankle, with leather sandals. The faded rust-brown stole is short and tied flat under the rope belt, not hanging loose. It must still read clearly as a robe, not as trousers. Shape the clothing so the body underneath is easy to read for automatic rigging: the torso, hips, knees and ankles must be clearly visible or closely outlined by the clothing, with clear empty space between the arms and the torso and between the legs. Ancient Bronze Age Near East: no medieval, Roman or Greek details.\n\nStyle: match the first reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette of charcoal wool, faded rust-brown, ash white and dull bronze. Use the first reference only for painting style, palette and material treatment; do not copy its scene or composition. Use the second reference only for who he is.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights or rim light, so the true colors of every material are visible.\n\nFraming: a single character, centered, entirely in frame head to toe with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "seer3-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a19c40-5f35-7277-adb4-962d917ac845",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a19c3f-878e-7438-ac0d-d78f2be0a683",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 15000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ],
+      "pose_mode": "t-pose"
+    },
+    "file": "seer3.glb"
+  },
+  "rig": {
+    "tool": "meshy_rig",
+    "task_id": "01a19c41-b46a-7357-96e4-3b458fa70dac",
+    "credits": 5,
+    "args": {
+      "input_task_id": "01a19c40-5f35-7277-adb4-962d917ac845",
+      "height_meters": 1.75
+    },
+    "joint_check": "Spine chain within 2 cm front-to-back, knees inside the legs (checked before animating)",
+    "files": {
+      "seer3.glb": "rigged character (T-pose)",
+      "seer3-walk-armature.glb": "walking, armature only"
+    }
+  },
+  "animation": {
+    "tool": "meshy_animate",
+    "task_id": "01a19c42-43a0-7400-8964-4ff7e6eff994",
+    "credits": 18,
+    "args": {
+      "rig_task_id": "01a19c41-b46a-7357-96e4-3b458fa70dac",
+      "action_ids": [
+        85,
+        240,
+        129,
+        127,
+        178,
+        8
+      ]
+    },
+    "clips_in_order": [
+      "Axe_Stance",
+      "Thrust_Slash",
+      "mage_soell_cast",
+      "Charged_Ground_Slam",
+      "Hit_Reaction",
+      "Dead"
+    ],
+    "file": "seer3-combat.glb"
+  },
+  "runtime": {
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<name>.glb --compress meshopt --texture-compress webp --texture-size 1024",
+    "files": {
+      "public/assets/models/seer.glb": "from seer3-combat-final.glb (mesh, skeleton, 6 clips)",
+      "public/assets/models/seer-walk.glb": "from seer3-walk-armature.glb (walk clip only)"
+    },
+    "final": [
+      "node /tmp/gltf-tools/merge-clips.mjs seer3-combat.glb seer3-spear-thrust.glb seer3-combat-final.glb retarget_clip=Spear_Thrust -Thrust_Slash"
+    ]
+  },
+  "rejected_designs": [
+    {
+      "task_id": "01a19a37-28ad-7753-863e-0ec6791c77d0",
+      "credits": 12,
+      "prompt": "A full-body character design of a cultist seer, to be built into a 3D game model. Front view, standing in a T-pose: arms straight out to the sides at shoulder height, palms down, fingers slightly apart, legs slightly apart, feet flat. Empty hands: no weapon, no instrument, nothing carried or slung on the back. He is the same man shown in the second reference image: keep his gaunt face, grey-streaked beard, charcoal-black hood, the broad band of ash-white paint across his eyes, and his rope belt with small bronze charms exactly. Change his robe to fit closely: a charcoal-black (not pure black) robe of coarse wool, fitted at the chest and waist, ending at mid-shin so his lower legs and leather sandals show, with narrow sleeves that follow the arms to the wrist. The faded rust-brown stole is short and tied flat under the rope belt, not hanging loose. Shape the clothing so the body underneath is easy to read for automatic rigging: the torso, hips, knees and ankles must be clearly visible or closely outlined by the clothing, with clear empty space between the arms and the torso and between the legs. Ancient Bronze Age Near East: no medieval, Roman or Greek details.\n\nStyle: match the first reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette of charcoal wool, faded rust-brown, ash white and dull bronze. Use the first reference only for painting style, palette and material treatment; do not copy its scene or composition. Use the second reference only for who he is.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights or rim light, so the true colors of every material are visible.\n\nFraming: a single character, centered, entirely in frame head to toe with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+      "why": "Rig-friendly but turned the robe into loose trousers; canon: men in black robes."
+    }
+  ],
+  "motions": {
+    "date": "2026-11-02",
+    "generated": "see meshy_output/jubal/jubal.meta.json motions.generated",
+    "applied": [
+      {
+        "clip": "Spear_Thrust",
+        "tool": "meshy_animate",
+        "task_id": "01a19cd7-a4fe-746c-bc64-25ff77a4e1b4",
+        "credits": 3,
+        "args": {
+          "rig_task_id": "01a19c41-b46a-7357-96e4-3b458fa70dac",
+          "motion_task_id": "01a19ccc-6d8e-7636-8cd2-b7a3796c4b8e"
+        },
+        "file": "seer3-spear-thrust.glb"
+      }
+    ]
+  },
+  "clips_in_order": [
+    "Axe_Stance",
+    "mage_soell_cast",
+    "Charged_Ground_Slam",
+    "Hit_Reaction",
+    "Dead",
+    "Spear_Thrust"
+  ],
+  "dropped_clips": {
+    "Thrust_Slash": "replaced by Spear_Thrust for the staff jab"
+  }
+}

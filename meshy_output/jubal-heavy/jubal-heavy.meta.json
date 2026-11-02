@@ -1,0 +1,159 @@
+{
+  "slug": "jubal-heavy",
+  "date": "2026-11-02",
+  "unit": "jubal",
+  "armor": "heavy",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19c89-74f4-74b7-8dad-da064f45b525",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png",
+        "meshy_output/jubal/jubal-design.png"
+      ]
+    },
+    "prompt": "A full-body character design of Jubal, a young Cainite musician and the hero of the game, to be built into a 3D game model. Front view, standing in a T-pose: arms straight out to the sides at shoulder height, palms down, fingers slightly apart, legs slightly apart, feet flat. Empty hands: no weapon, no instrument, nothing carried or slung on the back. He is the same young man shown in the second reference image: keep his face, short dark hair, plain cloth headband, olive-brown skin and lean build exactly. Keep his cream, undyed linen garment that falls to the knee, tied at the waist with a rope, and his simple leather sandals. Over the linen he wears heavy armor: a fitted bronze cuirass shaped to his chest and back, a short skirt of hardened leather strips ending above the knee, bronze greaves on his shins, leather bracers, and a close-fitting bronze helmet with cheek guards that leave his face visible and a short, low horsehair crest that stays close to the helmet and does not hang down his back. No cape, no shield. Shape the clothing so the body underneath is easy to read for automatic rigging: the torso, hips, knees and ankles must be clearly visible or closely outlined by the clothing, with clear empty space between the arms and the torso and between the legs. Ancient Bronze Age Near East: no medieval, Roman or Greek details.\n\nStyle: match the first reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette of cream linen, dull worn bronze, dark leather and ochre dust. Use the first reference only for painting style, palette and material treatment; do not copy its scene or composition. Use the second reference only for who he is.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights or rim light, so the true colors of every material are visible.\n\nFraming: a single character, centered, entirely in frame head to toe with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "jubal-heavy-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a19c8d-5663-7634-9f3b-d2c80b0bd473",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a19c89-74f4-74b7-8dad-da064f45b525",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 15000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ],
+      "pose_mode": "t-pose"
+    },
+    "file": "jubal-heavy.glb"
+  },
+  "rig": {
+    "tool": "meshy_rig",
+    "task_id": "01a19c8e-9ed4-77ba-90b0-67ee06974407",
+    "credits": 5,
+    "args": {
+      "input_task_id": "01a19c8d-5663-7634-9f3b-d2c80b0bd473",
+      "height_meters": 1.72
+    },
+    "joint_check": "Spine chain within 1.2 cm front to back, knees inside the legs (checked before animating)",
+    "files": {
+      "jubal-heavy.glb": "rigged character (T-pose)",
+      "jubal-heavy-walk-armature.glb": "walking, armature only"
+    }
+  },
+  "animation": [
+    {
+      "tool": "meshy_animate",
+      "task_id": "01a19c94-4da8-76e3-838d-38ec31f2d86a",
+      "credits": 30,
+      "args": {
+        "rig_task_id": "01a19c8e-9ed4-77ba-90b0-67ee06974407",
+        "action_ids": [
+          89,
+          240,
+          421,
+          178,
+          8,
+          85,
+          219,
+          128,
+          224,
+          232
+        ]
+      },
+      "file": "jubal-heavy-combat.glb"
+    },
+    {
+      "tool": "meshy_animate",
+      "task_id": "01a19c94-4da7-77fb-aac7-e82ef4910509",
+      "credits": 3,
+      "args": {
+        "rig_task_id": "01a19c8e-9ed4-77ba-90b0-67ee06974407",
+        "action_ids": [
+          92
+        ]
+      },
+      "file": "jubal-heavy-extra.glb",
+      "note": "One animate call takes at most 10 actions; merged into the combat file with merge-clips.mjs (the single-clip export names it Armature|Double_Combo_Attack|baselayer)."
+    }
+  ],
+  "clips_in_order": [
+    "Combat_Stance",
+    "Thrust_Slash",
+    "Over_Shoulder_Throw",
+    "Hit_Reaction",
+    "Dead",
+    "Axe_Stance",
+    "Right_Hand_Sword_Slash",
+    "Heavy_Hammer_Swing",
+    "Archery_Shot",
+    "Cowboy_Quick_Draw_Shooting",
+    "Spear_Thrust",
+    "Javelin_Throw",
+    "Dual_Blades"
+  ],
+  "runtime": {
+    "merge": "node merge-clips.mjs jubal-heavy-combat.glb jubal-heavy-extra.glb jubal-heavy-combat-merged.glb",
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<name>.glb --compress meshopt --texture-compress webp --texture-size 1024",
+    "files": {
+      "public/assets/models/jubal-heavy.glb": "from jubal-heavy-combat-final.glb (mesh, skeleton, 13 clips)",
+      "public/assets/models/jubal-heavy-walk.glb": "from jubal-heavy-walk-armature.glb (walk clip only)"
+    },
+    "final": [
+      "node /tmp/gltf-tools/merge-clips.mjs jubal-heavy-combat-merged.glb jubal-heavy-spear-thrust.glb jubal-heavy-combat-final.glb retarget_clip=Spear_Thrust -Double_Combo_Attack",
+      "node /tmp/gltf-tools/merge-clips.mjs jubal-heavy-combat-final.glb jubal-heavy-javelin-throw.glb jubal-heavy-combat-final.glb retarget_clip=Javelin_Throw",
+      "node /tmp/gltf-tools/merge-clips.mjs jubal-heavy-combat-final.glb jubal-heavy-dual-blades.glb jubal-heavy-combat-final.glb retarget_clip=Dual_Blades"
+    ]
+  },
+  "motions": {
+    "date": "2026-11-02",
+    "generated": "see meshy_output/jubal/jubal.meta.json motions.generated",
+    "applied": [
+      {
+        "clip": "Spear_Thrust",
+        "tool": "meshy_animate",
+        "task_id": "01a19cd7-a4ef-70f1-a290-80908edffb6b",
+        "credits": 3,
+        "args": {
+          "rig_task_id": "01a19c8e-9ed4-77ba-90b0-67ee06974407",
+          "motion_task_id": "01a19ccc-6d8e-7636-8cd2-b7a3796c4b8e"
+        },
+        "file": "jubal-heavy-spear-thrust.glb"
+      },
+      {
+        "clip": "Javelin_Throw",
+        "tool": "meshy_animate",
+        "task_id": "01a19cd7-a4f1-738d-aef3-c2edc76c927b",
+        "credits": 3,
+        "args": {
+          "rig_task_id": "01a19c8e-9ed4-77ba-90b0-67ee06974407",
+          "motion_task_id": "01a19ccc-6d80-76c9-82d1-4bb499c2d78d"
+        },
+        "file": "jubal-heavy-javelin-throw.glb"
+      },
+      {
+        "clip": "Dual_Blades",
+        "tool": "meshy_animate",
+        "task_id": "01a19cd7-a4fa-7231-b7b7-3099271a8b8d",
+        "credits": 3,
+        "args": {
+          "rig_task_id": "01a19c8e-9ed4-77ba-90b0-67ee06974407",
+          "motion_task_id": "01a19ccc-6d8a-774a-a861-8983d3a6eea3"
+        },
+        "file": "jubal-heavy-dual-blades.glb"
+      }
+    ]
+  },
+  "dropped_clips": {
+    "Double_Combo_Attack": "replaced by Dual_Blades (reverse grip read poorly)"
+  }
+}

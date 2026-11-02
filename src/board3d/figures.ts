@@ -1,16 +1,22 @@
 // Procedural low-poly unit figures for the 3D board, built on Rig (rig.ts): humanoids dressed by a per-unit look
-// with weapon props and armour by class, and quadrupeds from a body spec. Units without a figure keep the lathe pawn
-// (see makeToken), so new unit templates still appear before they get a figure.
+// with weapon props and armour by class, and quadrupeds from a body spec. Templates with a generated model (models.ts)
+// use ModelFigure once their files are loaded. Units without a figure keep the lathe pawn (see makeToken), so new unit
+// templates still appear before they get a figure.
 
 import * as THREE from 'three';
 import type { ArmorClass, UnitState, WeaponFamily } from '../rules/types';
-import { SKILLS, WEAPONS } from '../content/gear';
+import { WEAPONS } from '../content/gear';
+import { isAreaEffect, isRangedAttack } from './attacks';
 import { Giant } from './giant';
+import { ModelFigure } from './model-figure';
+import { modelsReady, unitModelFor, unitModelSlugs } from './models';
 import { Rig, TONE, box, cone, cyl, ico, key, phaseSeed, rod, UP, type Figure, type Keys, type StrikePlan } from './rig';
 
 export type { Figure } from './rig';
 
 export function makeFigure(u: UnitState): Figure | null {
+  const model = unitModelFor(u);
+  if (model && modelsReady(unitModelSlugs(model, u))) return new ModelFigure(u, model);
   const look = LOOKS[u.templateId];
   if (look) return new Humanoid(u, look);
   if (u.templateId === 'wolf') return new Beast(u, wolfSpec(u.name));
@@ -20,14 +26,6 @@ export function makeFigure(u: UnitState): Figure | null {
   if (u.templateId === 'nephilim') return new Giant(u);
   return null;
 }
-
-/** Attack and skill names that send something flying: `shot` skills and ranged weapon modes (javelin throw, bows). */
-const RANGED_ATTACKS = new Set([
-  ...Object.values(SKILLS).filter((s) => s.kind === 'shot').map((s) => s.name),
-  ...Object.values(WEAPONS).flatMap((w) => w.modes.filter((m) => m.ranged).map((m) => m.name)),
-]);
-/** Delayed area effects: cast on the ground, nothing flies. */
-const AREA_EFFECTS = new Set(Object.values(SKILLS).filter((s) => s.kind === 'sigil').map((s) => s.name));
 
 // ---------------- Weapon props ----------------
 
@@ -613,14 +611,14 @@ class Humanoid extends Rig {
   }
 
   protected strikePlan(_reach: number, attack: string): StrikePlan {
-    const ranged = RANGED_ATTACKS.has(attack);
+    const ranged = isRangedAttack(attack);
     switch (this.kind) {
       case 'bow':
         return { clip: 'shoot', projectile: 'arrow' };
       case 'crossbow':
         return { clip: 'bolt', projectile: 'bolt' };
       case 'staff':
-        if (AREA_EFFECTS.has(attack)) return { clip: 'cast' };
+        if (isAreaEffect(attack)) return { clip: 'cast' };
         return ranged ? { clip: 'cast', projectile: 'orb' } : { clip: 'jab' };
       case 'daggers':
         return ranged ? { clip: 'throw', projectile: 'knife' } : { clip: 'stab' };

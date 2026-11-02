@@ -1,0 +1,43 @@
+{
+  "slug": "hide-shield",
+  "date": "2026-11-02",
+  "unit": "jubal",
+  "used_for": "Sword & Shield and Javelin & Shield (left forearm)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19c89-74f5-71ab-97bd-b0bb677ba677",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png"
+      ]
+    },
+    "prompt": "A design of a single round shield, to be built into a 3D game prop, seen straight from the front: about as wide as a man's chest, undyed hide stretched over a wooden frame, laced to the frame at the rim with rawhide, with a worn bronze rim and a small central bronze boss. Plain, with no painted face, emblem or symbol. Scuffed, stained and old.\n\nStyle: match the reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette. Use the reference only for painting style, palette and material treatment; do not copy its scene or composition.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights, so the true colors of the materials are visible.\n\nFraming: a single object, centered, entirely in frame with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "hide-shield-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a19c8d-565e-70b7-8048-253a78c5a416",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a19c89-74f5-71ab-97bd-b0bb677ba677",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 3000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ]
+    },
+    "file": "hide-shield.glb"
+  },
+  "runtime": {
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<slug>.glb --compress meshopt --texture-compress webp --texture-size 512",
+    "files": {
+      "public/assets/models/hide-shield.glb": "from hide-shield.glb"
+    }
+  }
+}

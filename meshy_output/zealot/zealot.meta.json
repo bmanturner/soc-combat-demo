@@ -1,0 +1,79 @@
+{
+  "slug": "zealot",
+  "date": "2026-11-01",
+  "encounter": "cultists (The Ruined Shrine)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a198f9-893f-72bf-b262-404b48dd49d8",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png"
+      ]
+    },
+    "prompt": "A full-body character design of a cultist zealot, to be built into a 3D game model. Front view, standing in a T-pose: arms straight out to the sides at shoulder height, palms down, fingers slightly apart, legs slightly apart, feet flat. Empty hands: no weapon, no shield. A man of ordinary human build in a charcoal-black (not pure black) hooded robe of coarse wool that falls to mid-shin, worn and frayed at the hem, belted with a plain leather belt over a dark leather jerkin. The hood frames a gaunt, clean-shaven face with soot smeared beneath the eyes; the face is clearly visible. Bare forearms, simple leather sandals. Ancient Bronze Age Near East: no metal armor, no medieval, Roman or Greek details.\n\nStyle: match the reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette of charcoal, dark leather, ochre dust and dull bronze. Use the reference only for painting style, palette and material treatment; do not copy its scene or composition.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights or rim light, so the true colors of every material are visible.\n\nFraming: a single character, centered, entirely in frame head to toe with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "zealot-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a198fb-1a92-736d-a746-bc23486587eb",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a198f9-893f-72bf-b262-404b48dd49d8",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 15000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ],
+      "pose_mode": "t-pose"
+    },
+    "file": "zealot.glb"
+  },
+  "runtime": {
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<slug>.glb --compress meshopt --texture-compress webp --texture-size 1024",
+    "files": {
+      "public/assets/models/zealot.glb": "from zealot-combat.glb (mesh, skeleton, four clips)",
+      "public/assets/models/zealot-walk.glb": "from zealot-walk-armature.glb (walk clip only)"
+    }
+  },
+  "rig": {
+    "tool": "meshy_rig",
+    "task_id": "01a198fc-1872-72a5-919b-3eafa9a21d18",
+    "credits": 5,
+    "args": {
+      "input_task_id": "01a198fb-1a92-736d-a746-bc23486587eb",
+      "height_meters": 1.75
+    },
+    "files": {
+      "zealot.glb": "rigged character (T-pose)",
+      "zealot-walk.glb": "walking, with mesh",
+      "zealot-walk-armature.glb": "walking, armature only"
+    }
+  },
+  "animation": {
+    "tool": "meshy_animate",
+    "task_id": "01a198fc-8d5a-75af-b02b-71560aea287d",
+    "credits": 12,
+    "args": {
+      "rig_task_id": "01a198fc-1872-72a5-919b-3eafa9a21d18",
+      "action_ids": [
+        89,
+        219,
+        178,
+        8
+      ]
+    },
+    "clips_in_order": [
+      "Combat_Stance",
+      "Right_Hand_Sword_Slash",
+      "Hit_Reaction",
+      "Dead"
+    ],
+    "file": "zealot-combat.glb"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "slug": "shrine-masonry",
+  "date": "2026-11-01",
+  "encounter": "cultists (The Ruined Shrine)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a198f9-965d-769c-9aa0-a6433312497b",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png"
+      ]
+    },
+    "prompt": "A design of a single low heap of fallen masonry, to be built into a 3D game prop used as cover: two large rectangular cut-sandstone blocks lying at angles, a third block leaning against them, and a few broken chunks and rubble at the base, together forming one solid knee-to-waist-high obstacle about as wide as it is deep. Red-brown sandstone, cracked, chipped and dusty, with old soot stains. Seen from a three-quarter view, slightly from above.\n\nStyle: match the reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette of red-brown sandstone, ochre dust and charcoal soot. Use the reference only for painting style, palette and material treatment; do not copy its scene or composition.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights, so the true colors of the stone are visible.\n\nFraming: a single object, centered, entirely in frame with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "shrine-masonry-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a198fb-2596-733e-86d0-a4c6df7d0c4a",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a198f9-965d-769c-9aa0-a6433312497b",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 5000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ]
+    },
+    "file": "shrine-masonry.glb"
+  },
+  "runtime": {
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<slug>.glb --compress meshopt --texture-compress webp --texture-size 512",
+    "files": {
+      "public/assets/models/shrine-masonry.glb": "from shrine-masonry.glb"
+    }
+  }
+}

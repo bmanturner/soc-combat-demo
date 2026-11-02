@@ -1,0 +1,83 @@
+{
+  "slug": "jabal",
+  "date": "2026-11-01",
+  "encounter": "cultists (The Ruined Shrine)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19914-d86a-7624-a983-5f9b60631bf1",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png"
+      ]
+    },
+    "prompt": "A full-body character design of Jabal, a shepherd and tent-dweller, to be built into a 3D game model. Front view, standing in a T-pose: arms straight out to the sides at shoulder height, palms down, fingers slightly apart, legs slightly apart, feet flat. Empty hands: no weapon, no instrument, nothing carried or slung on the back. A sturdy, broad-shouldered man in his thirties with a full dark beard and a wrapped headcloth of undyed wool, sun-darkened skin. He wears a knee-length tunic of undyed brown wool, a plain hardened-leather jerkin over it, a thick cream sheepskin fleece draped over his shoulders and upper back, a wide leather belt, leather sandals and cloth wraps on his shins. Practical, protective and plain. Ancient Bronze Age Near East: no medieval, Roman or Greek details.\n\nStyle: match the reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette of undyed wool, cream fleece, worn leather and ochre dust. Use the reference only for painting style, palette and material treatment; do not copy its scene or composition.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights or rim light, so the true colors of every material are visible.\n\nFraming: a single character, centered, entirely in frame head to toe with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "jabal-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a199bf-4e02-71a1-adfe-4112b0c28741",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a19914-d86a-7624-a983-5f9b60631bf1",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 15000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ],
+      "pose_mode": "t-pose"
+    },
+    "file": "jabal.glb"
+  },
+  "rig": {
+    "tool": "meshy_rig",
+    "task_id": "01a199c1-ac36-713f-a9be-80928b083624",
+    "credits": 5,
+    "args": {
+      "input_task_id": "01a199bf-4e02-71a1-adfe-4112b0c28741",
+      "height_meters": 1.8
+    },
+    "files": {
+      "jabal.glb": "rigged character (T-pose)",
+      "jabal-walk-armature.glb": "walking, armature only"
+    }
+  },
+  "animation": {
+    "tool": "meshy_animate",
+    "task_id": "01a199c3-0138-7286-86a5-7a3251e91c38",
+    "credits": 12,
+    "args": {
+      "rig_task_id": "01a199c1-ac36-713f-a9be-80928b083624",
+      "action_ids": [
+        85,
+        128,
+        178,
+        8
+      ]
+    },
+    "clips_in_order": [
+      "Axe_Stance",
+      "Heavy_Hammer_Swing",
+      "Hit_Reaction",
+      "Dead"
+    ],
+    "file": "jabal-combat.glb"
+  },
+  "runtime": {
+    "files": {},
+    "note": "public/assets/models/jabal.glb now comes from meshy_output/jabal2/"
+  },
+  "superseded_by": "meshy_output/jabal2/",
+  "superseded_why": "The auto-rig placed the spine and knee joints outside the body under the loose clothing (spine joints zig-zagging up to 16 cm front to back), so every clip bent the lower back the wrong way. Re-rigging the same mesh reproduced the same joints. Its design image is kept as the identity reference for the redesign.",
+  "rerig_probe": {
+    "tool": "meshy_rig",
+    "task_id": "01a19a1a-d8ce-711b-b453-74e99beac943",
+    "credits": 5,
+    "result": "same misplaced joints"
+  }
+}

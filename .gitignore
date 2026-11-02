@@ -5,5 +5,10 @@ test-results
 *.log
 .DS_Store
 sim-output
+# Holds the Meshy API key (MESHY_API_KEY in mcpServers.meshy.env).
+.omp/mcp.json
 wiki/
 notes/canon-audit/
+# Raw Meshy downloads (tens of MB each; re-fetch or regenerate from the task IDs). Design images and *.meta.json stay.
+meshy_output/**/*.glb
+meshy_output/**/*_textures/

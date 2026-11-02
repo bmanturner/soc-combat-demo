@@ -1,0 +1,42 @@
+{
+  "slug": "seer-staff",
+  "date": "2026-11-01",
+  "encounter": "cultists (The Ruined Shrine)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19914-d85f-74f1-a655-84a8f79dc29e",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png"
+      ]
+    },
+    "prompt": "A design of a single tall ritual staff, to be built into a 3D game prop, standing upright and seen straight from the front: a shaft of dark, gnarled wood about as tall as a man, bound with a few dull bronze bands, topped with a bronze finial shaped as a pair of upward-curving bull horns. Soot-stained and old.\n\nStyle: match the reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette. Use the reference only for painting style, palette and material treatment; do not copy its scene or composition.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights, so the true colors of the materials are visible.\n\nFraming: a single object, centered, entirely in frame with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "seer-staff-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a199bf-4e02-7190-9ae2-4c2c3edb8106",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a19914-d85f-74f1-a655-84a8f79dc29e",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 3000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ]
+    },
+    "file": "seer-staff.glb"
+  },
+  "runtime": {
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<slug>.glb --compress meshopt --texture-compress webp --texture-size 512",
+    "files": {
+      "public/assets/models/seer-staff.glb": "from seer-staff.glb"
+    }
+  }
+}

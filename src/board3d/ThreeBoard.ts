@@ -14,6 +14,7 @@ import { choreograph, type Ease, type Stage } from '../board/choreography';
 import { COLORS } from '../board/palette';
 import { boardView, boardViewChanged, unitCenter, type FillLayer, type LineLayer, type Pt } from '../board/view-model';
 import { GroundShape, PAWN_HEIGHT, PX, applyOpacity, makeToken, overlayMaterial, paintToken, platePainted, sizePlate, type Token3D } from './meshes';
+import { DRESSING, assetsReady, boardAssets, boardTexture, dressingReady, fittedProp, loadAssets, type Dressing } from './models';
 import { makeProjectile } from './projectiles';
 import type { Projectile } from './rig';
 import { EASE, TweenClock, yoyo } from './tweens';
@@ -27,6 +28,17 @@ const LAYER_ORDER: Record<FillLayer | LineLayer, number> = { zone: 1, telegraph:
 const HOME_DIRECTION = new THREE.Vector3(0, Math.cos((35 * Math.PI) / 180), Math.sin((35 * Math.PI) / 180));
 const CLICK_SLOP = 5;
 const TOUCH_SLOP = 10; // fingers jitter more than a mouse; still well under an orbit drag
+const SUN = 2.1;
+const SKY = 1.15;
+/** Brazier flame: warm point light and additive glow, flickering per tile. */
+const BRAZIER = { color: '#ff9a4a', intensity: 6, distance: 4.5, glow: 0.32 } as const;
+const NEIGHBOURS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+
+interface Flame {
+  light: THREE.PointLight;
+  glow: THREE.Sprite;
+  seed: number;
+}
 
 interface Rect {
   x: number;
@@ -87,7 +99,8 @@ export class ThreeBoard implements Animator, Stage {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(36, 1, 0.1, 400);
   private readonly controls: OrbitControls;
-  private readonly sun = new THREE.DirectionalLight('#ffe2b8', 2.1);
+  private readonly sun = new THREE.DirectionalLight('#ffe2b8', SUN);
+  private readonly sky = new THREE.HemisphereLight('#c9b79a', '#1a120c', SKY);
   private readonly mapGroup = new THREE.Group();
   private readonly overlayGroup = new THREE.Group();
   private readonly fxGroup = new THREE.Group();
@@ -129,6 +142,9 @@ export class ThreeBoard implements Animator, Stage {
   private destroyed = false;
   /** Team-colour figure outlines; built on first use, while the toggle is on. */
   private outline: { party: OutlinePass; enemy: OutlinePass } | null = null;
+  private flames: Flame[] = [];
+  /** Generated models finished loading; rebuild once nothing is animating. */
+  private modelsArrived = false;
 
   constructor(private readonly host: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -163,7 +179,7 @@ export class ThreeBoard implements Animator, Stage {
 
     this.scene.background = new THREE.Color(COLORS.bg);
     this.scene.fog = new THREE.Fog(COLORS.bg, 40, 90);
-    this.scene.add(new THREE.HemisphereLight('#c9b79a', '#1a120c', 1.15));
+    this.scene.add(this.sky);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.0004;
@@ -362,7 +378,14 @@ export class ThreeBoard implements Animator, Stage {
     disposeTree(this.tokenGroup);
     disposeTree(this.mapGroup);
     this.tokens.clear();
+    this.flames = [];
     if (!b) return;
+    const assets = boardAssets(store.getState().encounterId, b.units);
+    if (!assetsReady(assets))
+      loadAssets(assets).then(
+        () => (this.modelsArrived = true),
+        (err: unknown) => console.warn('3D models failed to load; keeping procedural figures and blocks', err),
+      );
     const sizeChanged = b.map.width !== this.boardW || b.map.height !== this.boardH;
     this.boardW = b.map.width;
     this.boardH = b.map.height;
@@ -441,20 +464,73 @@ export class ThreeBoard implements Animator, Stage {
       mesh.receiveShadow = true;
       this.mapGroup.add(mesh);
     };
-    // Floor flagstones with grout gaps; same per-tile shade pattern as the 2D board.
-    instanced(new RoundedBoxGeometry(0.95, 0.12, 0.95, 2, 0.03), new THREE.MeshStandardMaterial({ roughness: 0.92 }), kinds.floor, -0.06, (p) =>
-      color.copy(floor).lerp(white, ((p.x * 7 + p.y * 13) % 5) * 0.012),
+    const dressing = DRESSING[enc];
+    const dressed = dressing && dressingReady(dressing) ? dressing : null;
+    const painted = dressed?.floor ? boardTexture(dressed.floor) : undefined;
+    // Floor flagstones with grout gaps; same per-tile shade pattern as the 2D board. A painted floor keeps the gaps,
+    // so the grid still reads, and each flagstone shows its own part of the painting.
+    instanced(
+      new RoundedBoxGeometry(0.95, 0.12, 0.95, 2, 0.03),
+      painted ? paintedFloorMaterial(painted, W, H) : new THREE.MeshStandardMaterial({ roughness: 0.92 }),
+      kinds.floor,
+      -0.06,
+      (p) => (painted ? color.setScalar(1 - ((p.x * 7 + p.y * 13) % 5) * 0.012) : color.copy(floor).lerp(white, ((p.x * 7 + p.y * 13) % 5) * 0.012)),
     );
-    const wall = new THREE.Color(COLORS.wall);
-    // Waist-high walls: tall enough to read as walls, low enough that pawns behind them stay visible.
-    instanced(new RoundedBoxGeometry(1, 0.42, 1, 2, 0.04), new THREE.MeshStandardMaterial({ roughness: 0.85 }), kinds.wall, 0.15, (p) =>
-      color.copy(wall).lerp(white, ((p.x * 5 + p.y * 3) % 4) * 0.02),
-    );
-    instanced(new RoundedBoxGeometry(0.76, 0.36, 0.62, 3, 0.07), new THREE.MeshStandardMaterial({ roughness: 0.7 }), kinds.cover, 0.18, () => color.set(COLORS.cover));
+    if (dressed) {
+      this.dressMap(dressed, kinds.wall, kinds.cover, W, H);
+    } else {
+      const wall = new THREE.Color(COLORS.wall);
+      // Waist-high walls: tall enough to read as walls, low enough that pawns behind them stay visible.
+      instanced(new RoundedBoxGeometry(1, 0.42, 1, 2, 0.04), new THREE.MeshStandardMaterial({ roughness: 0.85 }), kinds.wall, 0.15, (p) =>
+        color.copy(wall).lerp(white, ((p.x * 5 + p.y * 3) % 4) * 0.02),
+      );
+      instanced(new RoundedBoxGeometry(0.76, 0.36, 0.62, 3, 0.07), new THREE.MeshStandardMaterial({ roughness: 0.7 }), kinds.cover, 0.18, () => color.set(COLORS.cover));
+      this.sun.intensity = SUN;
+      this.sky.intensity = SKY;
+    }
     const border = new GroundShape();
     border.frame(-0.06, -0.06, W + 0.12, H + 0.12, 0.05);
     const frame = border.mesh(overlayMaterial(COLORS.cover, 0.6), this.world({ x: 0, y: 0 }), 0.002);
     if (frame) this.mapGroup.add(frame);
+  }
+
+  /**
+   * Generated walls, cover and lit braziers (models.ts). Edge walls stay a low rubble line and inner walls stop below
+   * chest height, so units behind them stay visible; the scene dims so the brazier pools read.
+   */
+  private dressMap(d: Dressing, walls: Vec[], cover: Vec[], W: number, H: number): void {
+    const wallAt = new Set(walls.map((p) => `${p.x},${p.y}`));
+    const place = (o: THREE.Object3D, p: Vec, y = 0) => {
+      o.position.set(p.x + 0.5 - W / 2, y, p.y + 0.5 - H / 2);
+      // Quarter turns by tile, so repeated pieces never line up.
+      o.rotation.y = ((p.x * 7 + p.y * 13) % 4) * (Math.PI / 2);
+      this.mapGroup.add(o);
+    };
+    const glow = flameTexture();
+    for (const p of walls) {
+      if (p.x === 0 || p.y === 0 || p.x === W - 1 || p.y === H - 1) {
+        place(fittedProp(d.edge, 1.05, 0.6), p);
+        continue;
+      }
+      const pillar = fittedProp(d.inner, 0.62, 0.8);
+      place(pillar, p);
+      const free = NEIGHBOURS.every(([dx, dy]) => !wallAt.has(`${p.x + dx},${p.y + dy}`));
+      if (!free) continue;
+      const top: number = pillar.userData.height;
+      const brazier = fittedProp(d.brazier, 0.36);
+      place(brazier, p, top - 0.02);
+      const flameY = top + brazier.userData.height;
+      const light = new THREE.PointLight(BRAZIER.color, BRAZIER.intensity, BRAZIER.distance, 2);
+      light.position.set(brazier.position.x, flameY + 0.25, brazier.position.z);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: '#ffb065', blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+      sprite.position.set(brazier.position.x, flameY + 0.08, brazier.position.z);
+      sprite.scale.setScalar(BRAZIER.glow);
+      this.mapGroup.add(light, sprite);
+      this.flames.push({ light, glow: sprite, seed: p.x * 3.1 + p.y * 1.7 });
+    }
+    for (const p of cover) place(fittedProp(d.cover, 0.8, 0.42), p);
+    this.sun.intensity = d.sun;
+    this.sky.intensity = d.sky;
   }
 
   // ---------------- Overlays ----------------
@@ -759,7 +835,17 @@ export class ThreeBoard implements Animator, Stage {
     this.last = now;
     this.elapsed += dt;
     this.clock.tick(dt);
+    if (this.modelsArrived && !this.animating) {
+      this.modelsArrived = false;
+      this.rebuild();
+    }
     for (const t of this.tokens.values()) t.figure?.update(dt);
+    for (const f of this.flames) {
+      const t = this.elapsed / 1000 + f.seed;
+      const k = 0.82 + 0.1 * Math.sin(t * 9.1) + 0.08 * Math.sin(t * 23.7 + 1.3);
+      f.light.intensity = BRAZIER.intensity * k;
+      f.glow.scale.setScalar(BRAZIER.glow * (0.9 + 0.12 * k));
+    }
 
     // Telegraph pulse: 1 → 0.55 → 1 every 1.4 s, as on the 2D board.
     const pulse = 0.775 + 0.225 * Math.cos((this.elapsed / 700) * Math.PI);
@@ -1070,14 +1156,64 @@ function nearestFoe(u: UnitState, units: readonly UnitState[]): UnitState | null
   return best;
 }
 
+/**
+ * Flagstone material sampling one painting stretched over the whole board by world position, so each instanced
+ * flagstone shows its own part of it. The board is centred on the origin, `W` by `H` tiles; image top is row 0.
+ */
+function paintedFloorMaterial(painting: THREE.Texture, W: number, H: number): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ roughness: 0.92 });
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.boardPainting = { value: painting };
+    shader.uniforms.boardSize = { value: new THREE.Vector2(W, H) };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform vec2 boardSize;\nvarying vec2 vBoardUv;')
+      .replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
+vec4 boardPos = vec4(transformed, 1.0);
+#ifdef USE_INSTANCING
+boardPos = instanceMatrix * boardPos;
+#endif
+boardPos = modelMatrix * boardPos;
+vBoardUv = vec2(boardPos.x / boardSize.x + 0.5, 0.5 - boardPos.z / boardSize.y);`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D boardPainting;\nvarying vec2 vBoardUv;')
+      .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= texture2D(boardPainting, vBoardUv).rgb;');
+  };
+  m.customProgramCacheKey = () => 'painted-floor';
+  return m;
+}
+
+/** Soft round glow for brazier flames, drawn once per map build. */
+function flameTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  r.addColorStop(0, 'rgba(255,240,200,1)');
+  r.addColorStop(0.35, 'rgba(255,170,80,0.7)');
+  r.addColorStop(1, 'rgba(255,120,40,0)');
+  g.fillStyle = r;
+  g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 /** Dispose every geometry, material and texture under `root` and detach its children. */
 function disposeTree(root: THREE.Object3D): void {
   root.traverse((o) => {
     if (o instanceof THREE.InstancedMesh) o.dispose();
     const mesh = o as THREE.Mesh;
+    const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+    // Generated models share geometry and textures with the model cache (models.ts); only per-unit copies go.
+    if (o.userData.cachedModel) {
+      for (const m of materials) if (m.userData.ownMaterial) m.dispose();
+      return;
+    }
     // Sprites share one module-level quad geometry; never dispose it.
     if (!(o instanceof THREE.Sprite)) mesh.geometry?.dispose();
-    const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
     for (const m of materials) {
       (m as THREE.MeshBasicMaterial).map?.dispose();
       m.dispose();

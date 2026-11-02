@@ -1,0 +1,81 @@
+{
+  "slug": "jabal2",
+  "date": "2026-11-02",
+  "encounter": "cultists (The Ruined Shrine)",
+  "replaces": "meshy_output/jabal/ (its rig placed spine and knee joints outside the body, so every clip bent the back the wrong way)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19a37-23a8-73d5-babf-77368aac0876",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png",
+        "meshy_output/jabal/jabal-design.png"
+      ]
+    },
+    "prompt": "A full-body character design of Jabal, a shepherd and tent-dweller, to be built into a 3D game model. Front view, standing in a T-pose: arms straight out to the sides at shoulder height, palms down, fingers slightly apart, legs slightly apart, feet flat. Empty hands: no weapon, no instrument, nothing carried or slung on the back. He is the same man shown in the second reference image: keep his face, full dark beard, wrapped headcloth of undyed wool, sun-darkened skin and sturdy, broad-shouldered build exactly. Change his clothing to fit closely: a fitted tunic of undyed brown wool that ends just above the knee, a plain hardened-leather jerkin over it, a wide leather belt, bare knees, cloth wraps on the shins and leather sandals. The sheepskin fleece becomes a short mantle resting only on the tops of his shoulders and upper chest, ending above the shoulder blades and not hanging over the arms, back or sides. Shape the clothing so the body underneath is easy to read for automatic rigging: the torso, hips, knees and ankles must be clearly visible or closely outlined by the clothing, with clear empty space between the arms and the torso and between the legs. Practical, protective and plain. Ancient Bronze Age Near East: no medieval, Roman or Greek details.\n\nStyle: match the first reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette of undyed wool, cream fleece, worn leather and ochre dust. Use the first reference only for painting style, palette and material treatment; do not copy its scene or composition. Use the second reference only for who he is.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights or rim light, so the true colors of every material are visible.\n\nFraming: a single character, centered, entirely in frame head to toe with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "jabal2-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a19a38-2b50-7636-bf4e-c2fe49099148",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a19a37-23a8-73d5-babf-77368aac0876",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 15000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ],
+      "pose_mode": "t-pose"
+    },
+    "file": "jabal2.glb"
+  },
+  "rig": {
+    "tool": "meshy_rig",
+    "task_id": "01a19c40-61f8-7174-bda5-6e20c3307734",
+    "credits": 5,
+    "args": {
+      "input_task_id": "01a19a38-2b50-7636-bf4e-c2fe49099148",
+      "height_meters": 1.8
+    },
+    "joint_check": "Spine chain within 2 cm front-to-back, knees inside the legs (checked before animating)",
+    "files": {
+      "jabal2.glb": "rigged character (T-pose)",
+      "jabal2-walk-armature.glb": "walking, armature only"
+    }
+  },
+  "animation": {
+    "tool": "meshy_animate",
+    "task_id": "01a19c42-424b-71fb-98e2-c8319738b2ca",
+    "credits": 12,
+    "args": {
+      "rig_task_id": "01a19c40-61f8-7174-bda5-6e20c3307734",
+      "action_ids": [
+        85,
+        128,
+        178,
+        8
+      ]
+    },
+    "clips_in_order": [
+      "Axe_Stance",
+      "Heavy_Hammer_Swing",
+      "Hit_Reaction",
+      "Dead"
+    ],
+    "file": "jabal2-combat.glb"
+  },
+  "runtime": {
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<name>.glb --compress meshopt --texture-compress webp --texture-size 1024",
+    "files": {
+      "public/assets/models/jabal.glb": "from jabal2-combat.glb (mesh, skeleton, clips)",
+      "public/assets/models/jabal-walk.glb": "from jabal2-walk-armature.glb (walk clip only)"
+    }
+  }
+}

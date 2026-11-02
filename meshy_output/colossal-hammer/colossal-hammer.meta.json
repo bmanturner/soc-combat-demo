@@ -1,0 +1,43 @@
+{
+  "slug": "colossal-hammer",
+  "date": "2026-11-02",
+  "unit": "jubal",
+  "used_for": "Colossal Hammer",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19c89-7525-771b-aeb9-705c46bfd777",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png"
+      ]
+    },
+    "prompt": "A design of a single colossal two-handed war hammer, to be built into a 3D game prop. Laid flat and seen straight from the side: a long, thick wooden haft about as long as a man is tall to his shoulder, and at its top a huge rectangular head of dressed stone bound to the haft with heavy bronze bands. It looks as heavy as a strong man can lift. Weathered, chipped and old.\n\nStyle: match the reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette. Use the reference only for painting style, palette and material treatment; do not copy its scene or composition.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights, so the true colors of the materials are visible.\n\nFraming: a single object, centered, entirely in frame with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "colossal-hammer-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a19c8d-566d-763a-80b1-3c7ca5b203c3",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a19c89-7525-771b-aeb9-705c46bfd777",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 3000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ]
+    },
+    "file": "colossal-hammer.glb"
+  },
+  "runtime": {
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<slug>.glb --compress meshopt --texture-compress webp --texture-size 512",
+    "files": {
+      "public/assets/models/colossal-hammer.glb": "from colossal-hammer.glb"
+    }
+  }
+}

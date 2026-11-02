@@ -1,0 +1,43 @@
+{
+  "slug": "hunting-bow",
+  "date": "2026-11-02",
+  "unit": "jubal",
+  "used_for": "Hunting Bow (left hand)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19c89-74f4-70fb-8850-1918cfeecd36",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png"
+      ]
+    },
+    "prompt": "A design of a single strung composite recurve hunting bow of the ancient Near East, to be built into a 3D game prop, standing upright and seen straight from the side: limbs of wood, horn and sinew curving back at the tips, a leather-wrapped grip in the middle, and a taut bowstring. No arrow. Dark, worn and old.\n\nStyle: match the reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette. Use the reference only for painting style, palette and material treatment; do not copy its scene or composition.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights, so the true colors of the materials are visible.\n\nFraming: a single object, centered, entirely in frame with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "hunting-bow-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a19c8d-5668-7163-8d3e-f7afba42c0bc",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a19c89-74f4-70fb-8850-1918cfeecd36",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 3000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ]
+    },
+    "file": "hunting-bow.glb"
+  },
+  "runtime": {
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<slug>.glb --compress meshopt --texture-compress webp --texture-size 512",
+    "files": {
+      "public/assets/models/hunting-bow.glb": "from hunting-bow.glb"
+    }
+  }
+}

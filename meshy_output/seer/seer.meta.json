@@ -1,0 +1,100 @@
+{
+  "slug": "seer",
+  "date": "2026-11-01",
+  "encounter": "cultists (The Ruined Shrine)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19914-d866-74d6-961c-636ae7d75237",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png"
+      ]
+    },
+    "prompt": "A full-body character design of a cultist seer, to be built into a 3D game model. Front view, standing in a T-pose: arms straight out to the sides at shoulder height, palms down, fingers slightly apart, legs slightly apart, feet flat. Empty hands: no weapon, no instrument, nothing carried or slung on the back. A gaunt older man with a grey-streaked beard in a charcoal-black (not pure black) hooded robe of coarse wool that reaches his ankles, a faded rust-brown woven stole hanging from his shoulders, and a rope belt hung with small dull bronze charms. A broad band of ash-white paint is smeared across his eyes from temple to temple; the face is clearly visible inside the hood. Leather sandals. Ancient Bronze Age Near East: no medieval, Roman or Greek details.\n\nStyle: match the reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette of charcoal wool, faded rust-brown, ash white and dull bronze. Use the reference only for painting style, palette and material treatment; do not copy its scene or composition.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights or rim light, so the true colors of every material are visible.\n\nFraming: a single character, centered, entirely in frame head to toe with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "seer-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a199bf-4e02-718e-8883-f1cff6560ef3",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a19914-d866-74d6-961c-636ae7d75237",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 15000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ],
+      "pose_mode": "t-pose"
+    },
+    "file": "seer.glb"
+  },
+  "rig": {
+    "tool": "meshy_rig",
+    "task_id": "01a199c1-b987-7248-a0d4-806a5f0f4717",
+    "credits": 5,
+    "args": {
+      "input_task_id": "01a199bf-4e02-718e-8883-f1cff6560ef3",
+      "height_meters": 1.75
+    },
+    "files": {
+      "seer.glb": "rigged character (T-pose)",
+      "seer-walk-armature.glb": "walking, armature only"
+    }
+  },
+  "animation": {
+    "tool": "meshy_animate",
+    "task_id": "01a199da-585b-7603-9282-ab992714404d",
+    "credits": 18,
+    "args": {
+      "rig_task_id": "01a199c1-b987-7248-a0d4-806a5f0f4717",
+      "action_ids": [
+        85,
+        240,
+        129,
+        127,
+        178,
+        8
+      ]
+    },
+    "clips_in_order": [
+      "Axe_Stance",
+      "Thrust_Slash",
+      "mage_soell_cast",
+      "Charged_Ground_Slam",
+      "Hit_Reaction",
+      "Dead"
+    ],
+    "file": "seer-combat.glb",
+    "replaces": {
+      "task_id": "01a199c3-027e-76c9-9b14-59b42d56a8d0",
+      "credits": 18,
+      "action_ids": [
+        89,
+        240,
+        129,
+        127,
+        178,
+        8
+      ],
+      "why": "Combat Idle held the staff level like a spear; Axe Stance ends holding it upright."
+    }
+  },
+  "runtime": {
+    "files": {},
+    "note": "public/assets/models/seer.glb now comes from meshy_output/seer3/"
+  },
+  "superseded_by": "meshy_output/seer3/",
+  "superseded_why": "The auto-rig placed the spine and knee joints outside the body under the loose clothing (spine joints zig-zagging up to 16 cm front to back), so every clip bent the lower back the wrong way. Re-rigging the same mesh reproduced the same joints. Its design image is kept as the identity reference for the redesign.",
+  "rerig_probe": {
+    "tool": "meshy_rig",
+    "task_id": "01a19a1a-e1d3-774b-aaab-1f27e75bca2d",
+    "credits": 5,
+    "result": "same misplaced joints"
+  }
+}

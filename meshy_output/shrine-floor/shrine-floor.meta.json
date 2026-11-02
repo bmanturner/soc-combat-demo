@@ -1,0 +1,25 @@
+{
+  "slug": "shrine-floor",
+  "date": "2026-11-01",
+  "encounter": "cultists (The Ruined Shrine)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19914-d86c-7236-baef-f7c44a2e250d",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "4:3",
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png"
+      ]
+    },
+    "prompt": "A top-down orthographic painting, looking straight down, of the stone floor of a ruined Bronze Age shrine, to be used as the ground texture of a game board. Old, irregular red-brown sandstone flagstones, cracked and slightly sunken, packed ochre dust in the joints, scattered grit and small rubble, faded soot-black ritual marks (concentric rings and crude handprints) worn into the stone, and a few small tufts of dry olive weeds in the cracks. Even and low in contrast across the whole image with no single focal point, so a game grid can be laid over it and every part reads the same.\n\nStyle: match the reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette of red-brown sandstone, ochre dust and charcoal soot. Use the reference only for painting style, palette and material treatment; do not copy its scene or composition.\n\nLighting: soft, even, neutral overcast light. No cast shadows, no light pools, no vignette, no firelight.\n\nFraming: the floor fills the entire image edge to edge. No perspective, no horizon, no walls, pillars, steps, objects, figures, text, labels or UI.",
+    "file": "shrine-floor-design.png"
+  },
+  "runtime": {
+    "convert": "PIL WebP quality 78, full 1536x1152",
+    "files": {
+      "public/assets/textures/shrine-floor.webp": "painted ground stretched over the 12x9 board (4:3)"
+    }
+  }
+}

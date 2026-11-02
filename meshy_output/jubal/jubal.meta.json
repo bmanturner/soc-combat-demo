@@ -1,0 +1,218 @@
+{
+  "slug": "jubal",
+  "date": "2026-11-01",
+  "encounter": "cultists (The Ruined Shrine)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19914-d85e-7577-b68f-a742b4e658e2",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png"
+      ]
+    },
+    "prompt": "A full-body character design of Jubal, a young Cainite musician and the hero of the game, to be built into a 3D game model. Front view, standing in a T-pose: arms straight out to the sides at shoulder height, palms down, fingers slightly apart, legs slightly apart, feet flat. Empty hands: no weapon, no instrument, nothing carried or slung on the back. A lean young man in his early twenties, clean-shaven, short dark hair held back by a plain cloth headband, olive-brown skin. He wears a cream, undyed linen garment that falls to the knee, tied at the waist with a rope, and over it a short shirt of overlapping dull bronze scales on a leather backing, covering chest, back and shoulders and laced at the sides. Leather bracers and simple leather sandals. A villager who has picked up armor, not a trained soldier: no helmet, no cape. Ancient Bronze Age Near East: no medieval, Roman or Greek details.\n\nStyle: match the reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette of cream linen, dull bronze, worn leather and ochre dust. Use the reference only for painting style, palette and material treatment; do not copy its scene or composition.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights or rim light, so the true colors of every material are visible.\n\nFraming: a single character, centered, entirely in frame head to toe with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "jubal-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a199bf-4e01-74dd-a54a-0adc706824dc",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a19914-d85e-7577-b68f-a742b4e658e2",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 15000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ],
+      "pose_mode": "t-pose"
+    },
+    "file": "jubal.glb"
+  },
+  "rig": {
+    "tool": "meshy_rig",
+    "task_id": "01a199c1-9ea2-74f7-b5b7-486d57229636",
+    "credits": 5,
+    "args": {
+      "input_task_id": "01a199bf-4e01-74dd-a54a-0adc706824dc",
+      "height_meters": 1.72
+    },
+    "files": {
+      "jubal.glb": "rigged character (T-pose)",
+      "jubal-walk-armature.glb": "walking, armature only"
+    }
+  },
+  "animation": {
+    "tool": "meshy_animate",
+    "task_id": "01a199c2-ffac-714f-9088-577250d437a1",
+    "credits": 15,
+    "args": {
+      "rig_task_id": "01a199c1-9ea2-74f7-b5b7-486d57229636",
+      "action_ids": [
+        89,
+        240,
+        421,
+        178,
+        8
+      ]
+    },
+    "clips_in_order": [
+      "Combat_Stance",
+      "Thrust_Slash",
+      "Over_Shoulder_Throw",
+      "Hit_Reaction",
+      "Dead"
+    ],
+    "file": "jubal-combat.glb"
+  },
+  "runtime": {
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<slug>.glb --compress meshopt --texture-compress webp --texture-size 1024",
+    "files": {
+      "public/assets/models/jubal.glb": "from jubal-combat-final.glb (mesh, skeleton, 13 clips)",
+      "public/assets/models/jubal-walk.glb": "from jubal-walk-armature.glb (walk clip only)"
+    },
+    "merge": "node merge-clips.mjs jubal-combat.glb <extra>.glb jubal-combat-merged.glb (each extra in turn)",
+    "final": [
+      "node /tmp/gltf-tools/merge-clips.mjs jubal-combat-merged.glb jubal-spear-thrust.glb jubal-combat-final.glb retarget_clip=Spear_Thrust -Double_Combo_Attack",
+      "node /tmp/gltf-tools/merge-clips.mjs jubal-combat-final.glb jubal-javelin-throw.glb jubal-combat-final.glb retarget_clip=Javelin_Throw",
+      "node /tmp/gltf-tools/merge-clips.mjs jubal-combat-final.glb jubal-dual-blades.glb jubal-combat-final.glb retarget_clip=Dual_Blades"
+    ]
+  },
+  "extra_animations": [
+    {
+      "tool": "meshy_animate",
+      "task_id": "01a19c89-7a25-7303-8d74-c224d749025c",
+      "credits": 18,
+      "date": "2026-11-02",
+      "args": {
+        "rig_task_id": "01a199c1-9ea2-74f7-b5b7-486d57229636",
+        "action_ids": [
+          85,
+          219,
+          128,
+          224,
+          232,
+          92
+        ]
+      },
+      "file": "jubal-probe.glb"
+    }
+  ],
+  "clips_in_order": [
+    "Combat_Stance",
+    "Thrust_Slash",
+    "Over_Shoulder_Throw",
+    "Hit_Reaction",
+    "Dead",
+    "Axe_Stance",
+    "Right_Hand_Sword_Slash",
+    "Heavy_Hammer_Swing",
+    "Archery_Shot",
+    "Cowboy_Quick_Draw_Shooting",
+    "Spear_Thrust",
+    "Javelin_Throw",
+    "Dual_Blades"
+  ],
+  "motions": {
+    "date": "2026-11-02",
+    "note": "Generated once and applied to every Jubal body and the Seer. No library clip aims a held shaft, so the spear, javelin and crossbow are aimed at the target in code (src/board3d/models.ts Aim); these motions supply only the body movement.",
+    "generated": {
+      "spear-thrust": {
+        "tool": "meshy_text_to_motion",
+        "task_id": "01a19ccc-6d8e-7636-8cd2-b7a3796c4b8e",
+        "credits": 10,
+        "args": {
+          "prompt": "Standing in place, a warrior holds a spear low in his right hand with the point aimed forward, steps forward onto his left foot and stabs the spear straight ahead at chest height in one quick, powerful thrust, his left forearm held up across his chest as if bearing a shield, then pulls the spear back and returns to a ready stance.",
+          "duration": 2.5,
+          "mode": "prime"
+        }
+      },
+      "javelin-throw": {
+        "tool": "meshy_text_to_motion",
+        "task_id": "01a19ccc-6d80-76c9-82d1-4bb499c2d78d",
+        "credits": 10,
+        "args": {
+          "prompt": "Standing in place, a warrior raises a javelin in his right hand above his right shoulder with the point aimed forward, draws it back, steps forward onto his left foot and hurls it overhand straight ahead, following through with the throwing arm, his left forearm held up across his chest as if bearing a shield, then returns to a ready stance.",
+          "duration": 2.5,
+          "mode": "prime"
+        }
+      },
+      "crossbow-shot": {
+        "tool": "meshy_text_to_motion",
+        "task_id": "01a19ccc-6d88-7590-8774-8639f39db6c0",
+        "credits": 10,
+        "args": {
+          "prompt": "Standing in place, a soldier raises a crossbow in both hands to his right shoulder, right hand on the stock and left hand supporting the front, aims it straight ahead, holds steady, shoots, rocks back slightly from the recoil, then lowers it to a ready stance.",
+          "duration": 3.0,
+          "mode": "prime"
+        },
+        "rejected": "one-handed at arm's length like a pistol"
+      },
+      "dual-blades": {
+        "tool": "meshy_text_to_motion",
+        "task_id": "01a19ccc-6d8a-774a-a861-8983d3a6eea3",
+        "credits": 10,
+        "args": {
+          "prompt": "Standing in place, a fighter holding a short sword in each hand with both blades pointing forward attacks with a fast combination: a forward diagonal slash with the right sword, then a forward diagonal slash with the left sword, then returns to a guard with both blades pointing forward.",
+          "duration": 2.5,
+          "mode": "prime"
+        }
+      }
+    },
+    "applied": [
+      {
+        "clip": "Spear_Thrust",
+        "tool": "meshy_animate",
+        "task_id": "01a19cce-31c6-7775-b2a6-0bbb4a051c8f",
+        "credits": 3,
+        "args": {
+          "rig_task_id": "01a199c1-9ea2-74f7-b5b7-486d57229636",
+          "motion_task_id": "01a19ccc-6d8e-7636-8cd2-b7a3796c4b8e"
+        },
+        "file": "jubal-spear-thrust.glb"
+      },
+      {
+        "clip": "Javelin_Throw",
+        "tool": "meshy_animate",
+        "task_id": "01a19cce-31bf-70a7-bd9d-70b91fa63120",
+        "credits": 3,
+        "args": {
+          "rig_task_id": "01a199c1-9ea2-74f7-b5b7-486d57229636",
+          "motion_task_id": "01a19ccc-6d80-76c9-82d1-4bb499c2d78d"
+        },
+        "file": "jubal-javelin-throw.glb"
+      },
+      {
+        "clip": "Dual_Blades",
+        "tool": "meshy_animate",
+        "task_id": "01a19cce-31c6-7777-853a-9bc056f4589f",
+        "credits": 3,
+        "args": {
+          "rig_task_id": "01a199c1-9ea2-74f7-b5b7-486d57229636",
+          "motion_task_id": "01a19ccc-6d8a-774a-a861-8983d3a6eea3"
+        },
+        "file": "jubal-dual-blades.glb"
+      },
+      {
+        "clip": "Crossbow_Shot",
+        "tool": "meshy_animate",
+        "task_id": "01a19cce-31c6-7779-9f30-7e576e92eed8",
+        "credits": 3,
+        "args": {
+          "rig_task_id": "01a199c1-9ea2-74f7-b5b7-486d57229636",
+          "motion_task_id": "01a19ccc-6d88-7590-8774-8639f39db6c0"
+        },
+        "file": "jubal-crossbow-shot.glb",
+        "rejected": "one-handed at arm's length like a pistol; the two-handed Cowboy_Quick_Draw_Shooting pose, aimed in code, reads better as a crossbow"
+      }
+    ]
+  },
+  "dropped_clips": {
+    "Double_Combo_Attack": "replaced by Dual_Blades (reverse grip read poorly)"
+  }
+}

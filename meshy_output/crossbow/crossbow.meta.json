@@ -1,0 +1,47 @@
+{
+  "slug": "crossbow",
+  "date": "2026-11-02",
+  "unit": "jubal",
+  "used_for": "Bronze Crossbow",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19c8b-5f59-743b-b646-dbe1390ddb60",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png"
+      ]
+    },
+    "prompt": "A design of a single antique wooden crossbow as displayed in a history museum, to be built into a 3D game prop, seen from above at a three-quarter angle: a straight wooden stock about as long as a forearm and a half, a short bow of horn and wood lashed across its front with sinew, a simple bronze catch, and a taut string. Nothing loaded. Dark, worn wood and dull bronze; nothing polished or shiny.\n\nStyle: match the reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette. Use the reference only for painting style, palette and material treatment; do not copy its scene or composition.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights, so the true colors of the materials are visible.\n\nFraming: a single object, centered, entirely in frame with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "crossbow-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a19c8d-5662-745d-8df2-e1bc5717be61",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a19c8b-5f59-743b-b646-dbe1390ddb60",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 3000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ]
+    },
+    "file": "crossbow.glb"
+  },
+  "runtime": {
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<slug>.glb --compress meshopt --texture-compress webp --texture-size 512",
+    "files": {
+      "public/assets/models/crossbow.glb": "from crossbow.glb"
+    }
+  },
+  "refused_design": {
+    "credits": 0,
+    "why": "The first prompt (with \"trigger mechanism\") was declined by the provider safety check; reworded as a museum piece."
+  }
+}

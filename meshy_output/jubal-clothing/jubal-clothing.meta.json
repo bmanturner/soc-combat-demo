@@ -1,0 +1,176 @@
+{
+  "slug": "jubal-clothing",
+  "date": "2026-11-01",
+  "encounter": "cultists (The Ruined Shrine)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a199c7-b861-7352-9a22-8a4a1df7dbbe",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png",
+        "meshy_output/jubal/jubal-design.png"
+      ]
+    },
+    "prompt": "A full-body character design of Jubal, a young Cainite musician and the hero of the game, to be built into a 3D game model. Front view, standing in a T-pose: arms straight out to the sides at shoulder height, palms down, fingers slightly apart, legs slightly apart, feet flat. Empty hands: no weapon, no instrument, nothing carried or slung on the back. He is the same young man shown in the second reference image: keep his face, short dark hair, plain cloth headband, olive-brown skin and lean build exactly. Remove the bronze scale shirt: he wears only a simple one-piece garment of cream, undyed linen that falls to the knee, tied at the waist with a rope, with short sleeves, and simple leather sandals. No armor of any kind, no bracers, no belt pouch. A villager, not an armored adventurer. Ancient Bronze Age Near East: no medieval, Roman or Greek details.\n\nStyle: match the first reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette of cream linen, worn leather and ochre dust. Use the first reference only for painting style, palette and material treatment; do not copy its scene or composition. Use the second reference only for who he is.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights or rim light, so the true colors of every material are visible.\n\nFraming: a single character, centered, entirely in frame head to toe with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "jubal-clothing-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a199da-a77c-74e0-b76e-707ffdaf4847",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a199c7-b861-7352-9a22-8a4a1df7dbbe",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 15000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ],
+      "pose_mode": "t-pose"
+    },
+    "file": "jubal-clothing.glb"
+  },
+  "rig": {
+    "tool": "meshy_rig",
+    "task_id": "01a199dc-b1db-7133-a741-5f03b23243f2",
+    "credits": 5,
+    "args": {
+      "input_task_id": "01a199da-a77c-74e0-b76e-707ffdaf4847",
+      "height_meters": 1.72
+    },
+    "files": {
+      "jubal-clothing.glb": "rigged character (T-pose)",
+      "jubal-clothing-walk-armature.glb": "walking, armature only"
+    }
+  },
+  "animation": {
+    "tool": "meshy_animate",
+    "task_id": "01a199dd-3318-7130-97f3-3d74ab318594",
+    "credits": 15,
+    "args": {
+      "rig_task_id": "01a199dc-b1db-7133-a741-5f03b23243f2",
+      "action_ids": [
+        89,
+        240,
+        421,
+        178,
+        8
+      ]
+    },
+    "clips_in_order": [
+      "Combat_Stance",
+      "Thrust_Slash",
+      "Over_Shoulder_Throw",
+      "Hit_Reaction",
+      "Dead"
+    ],
+    "file": "jubal-clothing-combat.glb"
+  },
+  "runtime": {
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<slug>.glb --compress meshopt --texture-compress webp --texture-size 1024",
+    "files": {
+      "public/assets/models/jubal-clothing.glb": "from jubal-clothing-combat-final.glb (mesh, skeleton, 13 clips)",
+      "public/assets/models/jubal-clothing-walk.glb": "from jubal-clothing-walk-armature.glb (walk clip only)"
+    },
+    "merge": "node merge-clips.mjs jubal-clothing-combat.glb <extra>.glb jubal-clothing-combat-merged.glb (each extra in turn)",
+    "final": [
+      "node /tmp/gltf-tools/merge-clips.mjs jubal-clothing-combat-merged.glb jubal-clothing-spear-thrust.glb jubal-clothing-combat-final.glb retarget_clip=Spear_Thrust -Double_Combo_Attack",
+      "node /tmp/gltf-tools/merge-clips.mjs jubal-clothing-combat-final.glb jubal-clothing-javelin-throw.glb jubal-clothing-combat-final.glb retarget_clip=Javelin_Throw",
+      "node /tmp/gltf-tools/merge-clips.mjs jubal-clothing-combat-final.glb jubal-clothing-dual-blades.glb jubal-clothing-combat-final.glb retarget_clip=Dual_Blades"
+    ]
+  },
+  "extra_animations": [
+    {
+      "tool": "meshy_animate",
+      "task_id": "01a19c8d-5ad4-74e8-8e73-f255dd0483d2",
+      "credits": 12,
+      "date": "2026-11-02",
+      "args": {
+        "rig_task_id": "01a199dc-b1db-7133-a741-5f03b23243f2",
+        "action_ids": [
+          85,
+          219,
+          128,
+          224
+        ]
+      },
+      "file": "jubal-clothing-extra.glb"
+    },
+    {
+      "tool": "meshy_animate",
+      "task_id": "01a19c94-4da8-75a5-9550-54744ac3441f",
+      "credits": 6,
+      "date": "2026-11-02",
+      "args": {
+        "rig_task_id": "01a199dc-b1db-7133-a741-5f03b23243f2",
+        "action_ids": [
+          232,
+          92
+        ]
+      },
+      "file": "jubal-clothing-extra2.glb"
+    }
+  ],
+  "clips_in_order": [
+    "Combat_Stance",
+    "Thrust_Slash",
+    "Over_Shoulder_Throw",
+    "Hit_Reaction",
+    "Dead",
+    "Axe_Stance",
+    "Right_Hand_Sword_Slash",
+    "Heavy_Hammer_Swing",
+    "Archery_Shot",
+    "Cowboy_Quick_Draw_Shooting",
+    "Spear_Thrust",
+    "Javelin_Throw",
+    "Dual_Blades"
+  ],
+  "motions": {
+    "date": "2026-11-02",
+    "generated": "see meshy_output/jubal/jubal.meta.json motions.generated",
+    "applied": [
+      {
+        "clip": "Spear_Thrust",
+        "tool": "meshy_animate",
+        "task_id": "01a19cd7-a4e6-72ca-b246-09c4f425c323",
+        "credits": 3,
+        "args": {
+          "rig_task_id": "01a199dc-b1db-7133-a741-5f03b23243f2",
+          "motion_task_id": "01a19ccc-6d8e-7636-8cd2-b7a3796c4b8e"
+        },
+        "file": "jubal-clothing-spear-thrust.glb"
+      },
+      {
+        "clip": "Javelin_Throw",
+        "tool": "meshy_animate",
+        "task_id": "01a19cd7-a4e8-74dd-a6c4-8406dc9147e0",
+        "credits": 3,
+        "args": {
+          "rig_task_id": "01a199dc-b1db-7133-a741-5f03b23243f2",
+          "motion_task_id": "01a19ccc-6d80-76c9-82d1-4bb499c2d78d"
+        },
+        "file": "jubal-clothing-javelin-throw.glb"
+      },
+      {
+        "clip": "Dual_Blades",
+        "tool": "meshy_animate",
+        "task_id": "01a19cd7-a4e9-7341-85f8-32ef6a45a553",
+        "credits": 3,
+        "args": {
+          "rig_task_id": "01a199dc-b1db-7133-a741-5f03b23243f2",
+          "motion_task_id": "01a19ccc-6d8a-774a-a861-8983d3a6eea3"
+        },
+        "file": "jubal-clothing-dual-blades.glb"
+      }
+    ]
+  },
+  "dropped_clips": {
+    "Double_Combo_Attack": "replaced by Dual_Blades (reverse grip read poorly)"
+  }
+}

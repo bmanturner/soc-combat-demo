@@ -1,0 +1,42 @@
+{
+  "slug": "bronze-dagger",
+  "date": "2026-11-01",
+  "encounter": "cultists (The Ruined Shrine)",
+  "design": {
+    "tool": "meshy_image_to_image",
+    "task_id": "01a19914-d872-710b-9f1b-cc1aefc3837f",
+    "credits": 12,
+    "args": {
+      "ai_model": "gpt-image-2",
+      "aspect_ratio": "1:1",
+      "remove_background": true,
+      "reference_file_paths": [
+        "notes/art/style-reference-shrine-mood.png"
+      ]
+    },
+    "prompt": "A design of a single bronze dagger of the ancient Near East, to be built into a 3D game prop. Laid flat and seen straight from the side: a leaf-shaped, double-edged bronze blade about as long as a forearm, a short crossguard, a grip wrapped in dark leather and a crescent-shaped pommel. Dull, worn bronze with nicks, green-brown patina and grime; nothing polished or shiny.\n\nStyle: match the reference image's painting exactly: hand-painted grim dark-fantasy concept art, matte, gritty and aged, visible brushwork, earthy desaturated palette. Use the reference only for painting style, palette and material treatment; do not copy its scene or composition.\n\nLighting: soft, even, neutral overcast light from the front. No firelight, no colored light, no cast shadows, no dramatic highlights, so the true colors of the materials are visible.\n\nFraming: a single object, centered, entirely in frame with margin on all sides, on a plain light grey background. No text, labels, UI, ground plane or other objects.",
+    "file": "bronze-dagger-design.png"
+  },
+  "model": {
+    "tool": "meshy_image_to_3d",
+    "task_id": "01a199bf-4e02-7680-8b05-a80d36683edb",
+    "credits": 15,
+    "args": {
+      "input_task_id": "01a19914-d872-710b-9f1b-cc1aefc3837f",
+      "model_type": "smart-topology",
+      "ai_model": "meshy-t2.5",
+      "target_polycount": 2000,
+      "enable_pbr": true,
+      "target_formats": [
+        "glb"
+      ]
+    },
+    "file": "bronze-dagger.glb"
+  },
+  "runtime": {
+    "optimize": "npx -y @gltf-transform/cli optimize <raw>.glb public/assets/models/<slug>.glb --compress meshopt --texture-compress webp --texture-size 512",
+    "files": {
+      "public/assets/models/bronze-dagger.glb": "from bronze-dagger.glb"
+    }
+  }
+}
